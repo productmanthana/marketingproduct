@@ -7,6 +7,7 @@
  */
 import type { Channel } from './channel';
 import type { MessageAuthor } from './messageAuthor';
+import type { MessageDeliveryStatus } from './messageDeliveryStatus';
 import type { MessageDirection } from './messageDirection';
 
 export interface Message {
@@ -18,5 +19,11 @@ export interface Message {
   subject?: string | null;
   body: string;
   author: MessageAuthor;
+  /** recorded = stored in-app only (no provider connected) */
+  deliveryStatus?: MessageDeliveryStatus;
+  /** @nullable */
+  deliveryError?: string | null;
+  /** @nullable */
+  openedAt?: Date | null;
   createdAt: Date;
 }

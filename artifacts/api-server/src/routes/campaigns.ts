@@ -12,6 +12,9 @@ import {
   GenerateCampaignSequenceParams,
   GetCampaignParams,
   GetCampaignResponse,
+  PreviewSequenceStepBody,
+  PreviewSequenceStepParams,
+  PreviewSequenceStepResponse,
   ListCampaignsResponse,
   RunCampaignParams,
   RunCampaignResponse,
@@ -20,7 +23,7 @@ import {
   UpdateSequenceStepBody,
   UpdateSequenceStepParams,
 } from "@workspace/api-zod";
-import { generateSequence } from "../lib/ai";
+import { generateSequence, personalizeMessage } from "../lib/ai";
 import { getSettings, runCampaign, serializeCampaigns, serializeLeads } from "../lib/outreach";
 
 const router: IRouter = Router();
@@ -173,6 +176,39 @@ router.delete("/campaigns/:id/steps/:stepId", async (req, res): Promise<void> =>
       ),
     );
   res.sendStatus(204);
+});
+
+router.post("/campaigns/:id/steps/:stepId/preview", async (req, res): Promise<void> => {
+  const params = PreviewSequenceStepParams.safeParse(req.params);
+  const parsed = PreviewSequenceStepBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ error: (params.error ?? parsed.error)?.message });
+    return;
+  }
+  const [campaign] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, params.data.id));
+  const [step] = await db
+    .select()
+    .from(sequenceStepsTable)
+    .where(and(eq(sequenceStepsTable.id, params.data.stepId), eq(sequenceStepsTable.campaignId, params.data.id)));
+  const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, parsed.data.leadId));
+  if (!campaign || !step || !lead) {
+    res.status(404).json({ error: "Campaign, step or lead not found" });
+    return;
+  }
+  if (step.channel === "call") {
+    res.json(PreviewSequenceStepResponse.parse({ subject: null, body: step.template }));
+    return;
+  }
+  const msg = await personalizeMessage({
+    lead,
+    campaign,
+    settings: await getSettings(),
+    channel: step.channel,
+    subject: step.subject,
+    template: step.template,
+    stepNumber: step.stepOrder,
+  });
+  res.json(PreviewSequenceStepResponse.parse(msg));
 });
 
 router.post("/campaigns/:id/leads", async (req, res): Promise<void> => {

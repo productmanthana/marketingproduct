@@ -178,3 +178,46 @@ export async function summarizeCall(args: {
     `${senderContext(args.settings, args.campaign)}\n\nProspect:\n${leadProfile(args.lead)}\n\nRep's logged outcome: ${args.outcome ?? "(none)"}\nCall notes:\n${args.notes}`,
   );
 }
+
+export async function qualifyLead(args: {
+  lead: LeadRow;
+  icp: string;
+  settings: SettingsRow;
+}): Promise<{ score: number; reason: string }> {
+  const result = await jsonCompletion<{ score: number; reason: string }>(
+    `You qualify B2B leads against an ideal customer profile (ICP). Score fit from 0 (no fit) to 100 (perfect fit) using only the facts given; missing data lowers confidence, not necessarily the score. Give a one or two sentence reason naming the decisive factors. Respond as JSON: {"score": number, "reason": string}.`,
+    `Seller: ${args.settings.companyName}\nIdeal customer profile:\n${args.icp}\n\nLead:\n${leadProfile(args.lead)}`,
+  );
+  return { score: Math.max(0, Math.min(100, Math.round(Number(result.score) || 0))), reason: result.reason };
+}
+
+export async function researchCompany(args: {
+  lead: LeadRow;
+  website: string;
+  pageText: string;
+}): Promise<{ industry: string | null; summary: string; hooks: string[] }> {
+  const result = await jsonCompletion<{ industry?: string | null; summary: string; hooks?: string[] }>(
+    `You research prospects for sales outreach. From the company's website text, return: industry (2-4 words), summary (2 sentences on what the company does and for whom), and hooks (2-3 short, specific personalization angles a rep could open with). Only use facts present in the text. Respond as JSON: {"industry": string|null, "summary": string, "hooks": string[]}.`,
+    `Prospect:\n${leadProfile(args.lead)}\nWebsite: ${args.website}\n\nWebsite text:\n${args.pageText}`,
+  );
+  return { industry: result.industry ?? null, summary: result.summary, hooks: (result.hooks ?? []).slice(0, 3) };
+}
+
+/** System prompt for the AI voice agent that places the call. */
+export function voiceAgentPrompt(args: {
+  lead: LeadRow;
+  campaign: CampaignRow | null;
+  settings: SettingsRow;
+  objective: string | null;
+  script: string;
+}): string {
+  return [
+    `You are ${args.settings.senderName}, calling on behalf of ${args.settings.companyName}. You are on a live phone call with ${args.lead.firstName}${args.lead.company ? ` at ${args.lead.company}` : ""}.`,
+    `Objective: ${args.objective ?? args.campaign?.goal ?? "Book a meeting"}.`,
+    args.campaign?.productPitch && `What we offer: ${args.campaign.productPitch}`,
+    `Speak naturally in short sentences, one question at a time, and listen. Be honest that you are an AI assistant if asked. If they are busy, offer a better time. If they ask not to be called, apologise, confirm and end the call. Never invent prices, customers or features.`,
+    `Follow this call plan loosely:\n${args.script}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}

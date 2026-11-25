@@ -9,6 +9,7 @@ import {
   outreachConversationsTable,
   outreachMessagesTable,
   settingsTable,
+  tasksTable,
 } from "@workspace/db";
 import {
   GetChannelPerformanceResponse,
@@ -20,7 +21,7 @@ import {
   UpdateSettingsBody,
   UpdateSettingsResponse,
 } from "@workspace/api-zod";
-import { getSettings, leadName } from "../lib/outreach";
+import { getSettings, leadName, publicSettings } from "../lib/outreach";
 
 const router: IRouter = Router();
 const LEAD_STATUSES = ["new", "contacted", "replied", "interested", "meeting_booked", "not_interested", "unsubscribed"] as const;
@@ -42,6 +43,7 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
       sent: sql<number>`count(*) filter (where ${outreachMessagesTable.direction} = 'outbound')::int`,
       replies: sql<number>`count(*) filter (where ${outreachMessagesTable.direction} = 'inbound')::int`,
       ai: sql<number>`count(*) filter (where ${outreachMessagesTable.author} = 'ai')::int`,
+      opened: sql<number>`count(*) filter (where ${outreachMessagesTable.openedAt} is not null)::int`,
     })
     .from(outreachMessagesTable);
   const [calls] = await db
@@ -52,6 +54,10 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     .select({ n: sql<number>`count(*)::int` })
     .from(outreachConversationsTable)
     .where(eq(outreachConversationsTable.status, "needs_review"));
+  const [tasks] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(tasksTable)
+    .where(eq(tasksTable.done, false));
 
   const sent = msgs?.sent ?? 0;
   const replies = msgs?.replies ?? 0;
@@ -66,6 +72,8 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
       meetingsBooked: leads?.meetings ?? 0,
       callsScheduled: calls?.scheduled ?? 0,
       needsReview: review?.n ?? 0,
+      emailsOpened: msgs?.opened ?? 0,
+      openTasks: tasks?.n ?? 0,
     }),
   );
 });
@@ -128,7 +136,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
 });
 
 router.get("/settings", async (_req, res): Promise<void> => {
-  res.json(GetSettingsResponse.parse(await getSettings()));
+  res.json(GetSettingsResponse.parse(publicSettings(await getSettings())));
 });
 
 router.put("/settings", async (req, res): Promise<void> => {
@@ -138,8 +146,12 @@ router.put("/settings", async (req, res): Promise<void> => {
     return;
   }
   await getSettings();
-  const [row] = await db.update(settingsTable).set(parsed.data).where(eq(settingsTable.id, 1)).returning();
-  res.json(UpdateSettingsResponse.parse(row));
+  const changes = { ...parsed.data };
+  // Provider keys are write-only: an empty value keeps the stored key.
+  if (!changes.unipileApiKey) delete changes.unipileApiKey;
+  if (!changes.voiceApiKey) delete changes.voiceApiKey;
+  const [row] = await db.update(settingsTable).set(changes).where(eq(settingsTable.id, 1)).returning();
+  res.json(UpdateSettingsResponse.parse(publicSettings(row!)));
 });
 
 export default router;

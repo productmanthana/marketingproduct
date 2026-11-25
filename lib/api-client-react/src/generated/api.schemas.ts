@@ -56,6 +56,7 @@ export type CallStatus = typeof CallStatus[keyof typeof CallStatus];
 
 export const CallStatus = {
   scheduled: 'scheduled',
+  in_progress: 'in_progress',
   completed: 'completed',
   no_answer: 'no_answer',
 } as const;
@@ -97,6 +98,15 @@ export interface Lead {
   /** @nullable */
   notes?: string | null;
   /** @nullable */
+  website?: string | null;
+  /**
+     * 0-100 AI fit against the ideal customer profile
+     * @nullable
+     */
+  fitScore?: number | null;
+  /** @nullable */
+  fitReason?: string | null;
+  /** @nullable */
   lastContactedAt?: string | null;
   createdAt: string;
 }
@@ -123,6 +133,14 @@ export interface Conversation {
   lastMessageAt: string;
 }
 
+export type CallMode = typeof CallMode[keyof typeof CallMode];
+
+
+export const CallMode = {
+  manual: 'manual',
+  ai: 'ai',
+} as const;
+
 export interface Call {
   id: number;
   leadId: number;
@@ -148,6 +166,11 @@ export interface Call {
   nextStep?: string | null;
   /** @nullable */
   durationSeconds?: number | null;
+  mode?: CallMode;
+  /** @nullable */
+  transcript?: string | null;
+  /** @nullable */
+  recordingUrl?: string | null;
   /** @nullable */
   scheduledAt?: string | null;
   createdAt: string;
@@ -165,6 +188,12 @@ export const ActivityType = {
   status_change: 'status_change',
   lead_added: 'lead_added',
   campaign_run: 'campaign_run',
+  task_created: 'task_created',
+  lead_qualified: 'lead_qualified',
+  lead_enriched: 'lead_enriched',
+  email_opened: 'email_opened',
+  unsubscribed: 'unsubscribed',
+  delivery_failed: 'delivery_failed',
 } as const;
 
 export interface Activity {
@@ -179,10 +208,35 @@ export interface Activity {
   createdAt: string;
 }
 
+export type TaskSource = typeof TaskSource[keyof typeof TaskSource];
+
+
+export const TaskSource = {
+  manual: 'manual',
+  call_summary: 'call_summary',
+  ai_reply: 'ai_reply',
+  review: 'review',
+} as const;
+
+export interface Task {
+  id: number;
+  /** @nullable */
+  leadId?: number | null;
+  /** @nullable */
+  leadName?: string | null;
+  title: string;
+  /** @nullable */
+  dueAt?: string | null;
+  done: boolean;
+  source: TaskSource;
+  createdAt: string;
+}
+
 export type LeadDetail = Lead & {
   conversations: Conversation[];
   calls: Call[];
   activity: Activity[];
+  tasks: Task[];
 };
 
 export interface LeadInput {
@@ -195,6 +249,7 @@ export interface LeadInput {
   company?: string;
   title?: string;
   industry?: string;
+  website?: string;
   notes?: string;
   campaignId?: number;
 }
@@ -208,6 +263,7 @@ export interface LeadUpdate {
   company?: string;
   title?: string;
   industry?: string;
+  website?: string;
   notes?: string;
   status?: LeadStatus;
   /** @nullable */
@@ -217,6 +273,25 @@ export interface LeadUpdate {
 export interface LeadImportInput {
   campaignId?: number;
   leads: LeadInput[];
+}
+
+export interface QualifyLeadsInput {
+  /** Omit to score every lead without a score */
+  leadIds?: number[];
+}
+
+export interface QualifyResult {
+  qualified: number;
+}
+
+export interface StepPreviewInput {
+  leadId: number;
+}
+
+export interface StepPreview {
+  /** @nullable */
+  subject?: string | null;
+  body: string;
 }
 
 export interface ImportResult {
@@ -332,6 +407,19 @@ export const MessageAuthor = {
   lead: 'lead',
 } as const;
 
+/**
+ * recorded = stored in-app only (no provider connected)
+ */
+export type MessageDeliveryStatus = typeof MessageDeliveryStatus[keyof typeof MessageDeliveryStatus];
+
+
+export const MessageDeliveryStatus = {
+  recorded: 'recorded',
+  sent: 'sent',
+  failed: 'failed',
+  received: 'received',
+} as const;
+
 export interface Message {
   id: number;
   conversationId: number;
@@ -341,6 +429,12 @@ export interface Message {
   subject?: string | null;
   body: string;
   author: MessageAuthor;
+  /** recorded = stored in-app only (no provider connected) */
+  deliveryStatus?: MessageDeliveryStatus;
+  /** @nullable */
+  deliveryError?: string | null;
+  /** @nullable */
+  openedAt?: string | null;
   createdAt: string;
 }
 
@@ -408,6 +502,8 @@ export interface DashboardSummary {
   meetingsBooked: number;
   callsScheduled: number;
   needsReview: number;
+  emailsOpened?: number;
+  openTasks?: number;
 }
 
 export interface ChannelStat {
@@ -431,6 +527,23 @@ export interface Settings {
   globalAutoReply: boolean;
   /** Route objections/negative replies to human review instead of auto replying */
   escalateNegative?: boolean;
+  icpDescription?: string;
+  /** Public URL of this app, used for open tracking, unsubscribe links and webhooks */
+  publicBaseUrl?: string;
+  trackOpens?: boolean;
+  unsubscribeFooter?: boolean;
+  sendWindowStart?: number;
+  sendWindowEnd?: number;
+  sendWeekdaysOnly?: boolean;
+  timezone?: string;
+  unipileDsn?: string;
+  unipileAccountId?: string;
+  unipileConnected?: boolean;
+  linkedinDailyLimit?: number;
+  voiceApiBaseUrl?: string;
+  voicePhoneNumberId?: string;
+  voiceName?: string;
+  voiceConnected?: boolean;
 }
 
 export interface SettingsInput {
@@ -440,6 +553,141 @@ export interface SettingsInput {
   defaultTone?: string;
   globalAutoReply?: boolean;
   escalateNegative?: boolean;
+  icpDescription?: string;
+  publicBaseUrl?: string;
+  trackOpens?: boolean;
+  unsubscribeFooter?: boolean;
+  /**
+     * @minimum 0
+     * @maximum 23
+     */
+  sendWindowStart?: number;
+  /**
+     * @minimum 1
+     * @maximum 24
+     */
+  sendWindowEnd?: number;
+  sendWeekdaysOnly?: boolean;
+  timezone?: string;
+  unipileDsn?: string;
+  /** Write-only; empty keeps the stored key */
+  unipileApiKey?: string;
+  unipileAccountId?: string;
+  linkedinDailyLimit?: number;
+  voiceApiBaseUrl?: string;
+  /** Write-only; empty keeps the stored key */
+  voiceApiKey?: string;
+  voicePhoneNumberId?: string;
+  voiceName?: string;
+}
+
+export interface Mailbox {
+  id: number;
+  label: string;
+  fromName: string;
+  fromEmail: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUser: string;
+  /** @nullable */
+  imapHost?: string | null;
+  imapPort: number;
+  imapSecure: boolean;
+  /** @nullable */
+  imapUser?: string | null;
+  dailyLimit: number;
+  warmupEnabled: boolean;
+  warmupStart: number;
+  warmupIncrement: number;
+  sentToday: number;
+  /** Sending limit for today after warm-up ramp */
+  todayLimit: number;
+  active: boolean;
+  /** @nullable */
+  lastSyncAt?: string | null;
+  /** @nullable */
+  lastError?: string | null;
+  createdAt: string;
+}
+
+export interface MailboxInput {
+  /** @minLength 1 */
+  label: string;
+  fromName: string;
+  fromEmail: string;
+  smtpHost: string;
+  smtpPort?: number;
+  smtpSecure?: boolean;
+  smtpUser: string;
+  smtpPass: string;
+  imapHost?: string;
+  imapPort?: number;
+  imapSecure?: boolean;
+  imapUser?: string;
+  imapPass?: string;
+  dailyLimit?: number;
+  warmupEnabled?: boolean;
+  warmupStart?: number;
+  warmupIncrement?: number;
+}
+
+export interface MailboxUpdate {
+  label?: string;
+  fromName?: string;
+  fromEmail?: string;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpSecure?: boolean;
+  smtpUser?: string;
+  smtpPass?: string;
+  imapHost?: string;
+  imapPort?: number;
+  imapSecure?: boolean;
+  imapUser?: string;
+  imapPass?: string;
+  dailyLimit?: number;
+  warmupEnabled?: boolean;
+  warmupStart?: number;
+  warmupIncrement?: number;
+  active?: boolean;
+}
+
+export interface SyncResult {
+  mailboxes: number;
+  newReplies: number;
+  errors: string[];
+}
+
+export type IntegrationTestInputProvider = typeof IntegrationTestInputProvider[keyof typeof IntegrationTestInputProvider];
+
+
+export const IntegrationTestInputProvider = {
+  linkedin: 'linkedin',
+  voice: 'voice',
+} as const;
+
+export interface IntegrationTestInput {
+  provider: IntegrationTestInputProvider;
+}
+
+export interface IntegrationTestResult {
+  ok: boolean;
+  message: string;
+}
+
+export interface TaskInput {
+  /** @minLength 1 */
+  title: string;
+  leadId?: number;
+  dueAt?: string;
+}
+
+export interface TaskUpdate {
+  title?: string;
+  /** @nullable */
+  dueAt?: string | null;
+  done?: boolean;
 }
 
 export type ListLeadsParams = {
@@ -459,5 +707,10 @@ status?: CallStatus;
 
 export type GetRecentActivityParams = {
 limit?: number;
+};
+
+export type ListTasksParams = {
+done?: boolean;
+leadId?: number;
 };
 

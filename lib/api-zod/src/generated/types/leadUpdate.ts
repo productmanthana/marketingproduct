@@ -16,6 +16,7 @@ export interface LeadUpdate {
   company?: string;
   title?: string;
   industry?: string;
+  website?: string;
   notes?: string;
   status?: LeadStatus;
   /** @nullable */

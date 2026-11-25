@@ -15,11 +15,11 @@ export default function Dashboard() {
 
   const kpis = d ? [
     ["Leads", d.totalLeads, `${d.activeCampaigns} live campaigns`],
-    ["Sent", d.messagesSent, "messages out"],
+    ["Sent", d.messagesSent, `${d.emailsOpened} emails opened`],
     ["Replies", d.repliesReceived, `${pct(d.replyRate)} reply rate`],
     ["AI replies", d.aiRepliesSent, "handled for you", true],
     ["Meetings", d.meetingsBooked, "booked"],
-    ["Calls", d.callsScheduled, "scheduled"],
+    ["Calls", d.callsScheduled, `scheduled · ${d.openTasks} open tasks`],
   ] as const : [];
 
   const maxF = Math.max(1, ...(fn.data ?? []).map((f) => f.count));

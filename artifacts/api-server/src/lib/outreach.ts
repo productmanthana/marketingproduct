@@ -9,6 +9,7 @@ import {
   outreachMessagesTable,
   sequenceStepsTable,
   settingsTable,
+  tasksTable,
   type CallRow,
   type CampaignRow,
   type ConversationRow,
@@ -17,6 +18,7 @@ import {
 } from "@workspace/db";
 import { batchProcess } from "@workspace/integrations-openai-ai-server/batch";
 import { analyzeAndDraftReply, personalizeMessage } from "./ai";
+import { hasEmailCapacity, linkedinQuotaLeft, sendEmail, sendLinkedIn, unipileConfigured } from "./delivery";
 import { logger } from "./logger";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -36,6 +38,43 @@ export async function getSettings(): Promise<SettingsRow> {
   if (created) return created;
   const [again] = await db.select().from(settingsTable).where(eq(settingsTable.id, 1));
   return again!;
+}
+
+/** Settings as the API returns them: provider keys are never sent back, only whether they are set. */
+export function publicSettings(s: SettingsRow) {
+  const { unipileApiKey, voiceApiKey, ...rest } = s;
+  return {
+    ...rest,
+    unipileConnected: unipileConfigured(s),
+    voiceConnected: !!(voiceApiKey && s.voicePhoneNumberId),
+  };
+}
+
+/** True when the current time is inside the configured sending window (hour range and weekdays, in the chosen time zone). */
+export function withinSendWindow(s: SettingsRow, now = new Date()): boolean {
+  let hour: number;
+  let weekday: string;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: s.timezone || "UTC", hour: "numeric", hourCycle: "h23", weekday: "short" }).formatToParts(now);
+    hour = Number(parts.find((p) => p.type === "hour")?.value ?? now.getUTCHours());
+    weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
+  } catch {
+    hour = now.getUTCHours();
+    weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][now.getUTCDay()]!;
+  }
+  if (s.sendWeekdaysOnly && (weekday === "Sat" || weekday === "Sun")) return false;
+  return hour >= s.sendWindowStart && hour < s.sendWindowEnd;
+}
+
+// ---------- tasks ----------
+
+export async function createTask(entry: { title: string; leadId?: number | null; dueAt?: Date | null; source: string }) {
+  const [task] = await db
+    .insert(tasksTable)
+    .values({ title: entry.title, leadId: entry.leadId ?? null, dueAt: entry.dueAt ?? null, source: entry.source })
+    .returning();
+  await logActivity({ type: "task_created", description: `Task: ${entry.title}`, leadId: entry.leadId ?? null });
+  return task!;
 }
 
 // ---------- activity ----------
@@ -218,8 +257,9 @@ export async function getOrCreateConversation(
 }
 
 /**
- * Records an outbound message. Delivery through real providers (Gmail, LinkedIn,
- * telephony) is not connected yet, so messages are stored as sent in-app.
+ * Stores an outbound message and delivers it through the connected provider:
+ * SMTP mailboxes for email, Unipile for LinkedIn. With no provider connected the
+ * message is kept in-app only (deliveryStatus "recorded").
  */
 export async function recordOutbound(args: {
   conversation: ConversationRow;
@@ -229,7 +269,7 @@ export async function recordOutbound(args: {
   author: "user" | "ai";
 }) {
   const now = new Date();
-  const [message] = await db
+  const [inserted] = await db
     .insert(outreachMessagesTable)
     .values({
       conversationId: args.conversation.id,
@@ -241,12 +281,47 @@ export async function recordOutbound(args: {
       createdAt: now,
     })
     .returning();
+  const settings = await getSettings();
+  const delivery =
+    args.conversation.channel === "email"
+      ? await sendEmail({
+          settings,
+          conversation: args.conversation,
+          lead: args.lead,
+          subject: args.subject,
+          body: args.body,
+          trackingToken: inserted!.trackingToken,
+          manual: args.author === "user",
+        })
+      : args.conversation.channel === "linkedin"
+        ? await sendLinkedIn({ settings, lead: args.lead, body: args.body })
+        : ({ status: "recorded" } as const);
+  const [message] = await db
+    .update(outreachMessagesTable)
+    .set({
+      deliveryStatus: delivery.status,
+      deliveryError: delivery.status === "failed" ? delivery.error : null,
+      externalId: delivery.status === "sent" ? delivery.externalId : null,
+    })
+    .where(eq(outreachMessagesTable.id, inserted!.id))
+    .returning();
+  if (delivery.status === "failed") {
+    await logActivity({
+      type: "delivery_failed",
+      description: `${args.conversation.channel === "email" ? "Email" : "LinkedIn message"} to ${leadName(args.lead)} failed: ${delivery.error}`,
+      channel: args.conversation.channel,
+      leadId: args.lead.id,
+    });
+  }
   await db
     .update(outreachConversationsTable)
     .set({
       lastMessageAt: now,
       subject: args.conversation.subject ?? args.subject,
       ...(args.author === "user" ? { unread: false } : {}),
+      ...(delivery.status === "sent" && delivery.mailboxId
+        ? { mailboxId: delivery.mailboxId, externalThreadId: args.conversation.externalThreadId ?? delivery.threadId ?? null }
+        : {}),
     })
     .where(eq(outreachConversationsTable.id, args.conversation.id));
   await db
@@ -265,7 +340,7 @@ export async function recordOutbound(args: {
  */
 export async function processInbound(
   conversationId: number,
-  input: { body: string; subject?: string | null },
+  input: { body: string; subject?: string | null; externalId?: string | null },
 ): Promise<void> {
   const [conv] = await db
     .select()
@@ -283,6 +358,8 @@ export async function processInbound(
     subject: input.subject ?? null,
     body: input.body,
     author: "lead",
+    deliveryStatus: "received",
+    externalId: input.externalId ?? null,
     createdAt: now,
   });
   await db
@@ -354,6 +431,14 @@ export async function processInbound(
       .update(outreachConversationsTable)
       .set({ status, sentiment: analysis.sentiment })
       .where(eq(outreachConversationsTable.id, conv.id));
+    if (status === "needs_review") {
+      await createTask({
+        title: `Review ${analysis.sentiment} reply from ${leadName(lead)} on ${conv.channel}`,
+        leadId: lead.id,
+        dueAt: new Date(Date.now() + DAY_MS),
+        source: "review",
+      });
+    }
   }
   if (analysis.leadStatus !== "replied") {
     await logActivity({
@@ -374,6 +459,9 @@ async function executeStepForLead(
 ): Promise<"message" | "call" | "none"> {
   const step = steps[lead.currentStep];
   if (!step) return "none";
+  // Hold the lead (without advancing) when today's sending capacity for this channel is used up.
+  if (step.channel === "email" && lead.email && !(await hasEmailCapacity())) return "none";
+  if (step.channel === "linkedin" && lead.linkedinUrl && !(await linkedinQuotaLeft(settings))) return "none";
   let kind: "message" | "call" = "message";
 
   if (step.channel === "call") {
@@ -492,6 +580,7 @@ export function startScheduler(): void {
     if (running) return;
     running = true;
     try {
+      if (!withinSendWindow(await getSettings())) return;
       const active = await db.select().from(campaignsTable).where(eq(campaignsTable.status, "active"));
       for (const c of active) {
         const result = await runCampaign(c.id);

@@ -16,6 +16,7 @@ export interface LeadInput {
   company?: string;
   title?: string;
   industry?: string;
+  website?: string;
   notes?: string;
   campaignId?: number;
 }

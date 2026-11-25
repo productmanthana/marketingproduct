@@ -14,6 +14,7 @@ import LeadDetail from '@/pages/lead-detail';
 import Inbox from '@/pages/inbox';
 import Calls from '@/pages/calls';
 import SettingsPage from '@/pages/settings';
+import Tasks from '@/pages/tasks';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000, refetchOnWindowFocus: false } } });
 
@@ -29,6 +30,7 @@ function Router() {
           <Route path="/leads/:id" component={LeadDetail} />
           <Route path="/inbox" component={Inbox} />
           <Route path="/calls" component={Calls} />
+          <Route path="/tasks" component={Tasks} />
           <Route path="/settings" component={SettingsPage} />
           <Route component={NotFound} />
         </Switch>

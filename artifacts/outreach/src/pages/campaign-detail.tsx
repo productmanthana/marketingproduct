@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
-import { ArrowDown, ArrowUp, ChevronLeft, Pencil, Plus, Rocket, Sparkles, Trash2, UserPlus, Users, Workflow } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, Eye, Pencil, Plus, Rocket, Sparkles, Trash2, UserPlus, Users, Workflow } from "lucide-react";
 import {
   useGetCampaign, useUpdateCampaign, useDeleteCampaign, useAddSequenceStep, useUpdateSequenceStep, useDeleteSequenceStep,
-  useEnrollLeads, useGenerateCampaignSequence, useRunCampaign, useListLeads,
+  useEnrollLeads, useGenerateCampaignSequence, useRunCampaign, useListLeads, usePreviewSequenceStep,
 } from "@workspace/api-client-react";
-import type { RunResult, SequenceStep } from "@workspace/api-client-react";
+import type { Lead, RunResult, SequenceStep, StepPreview } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { PageHeader, Panel, Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, useRefreshAll, CH, chColor, TONE_OPTIONS, ago, type Ch } from "@/components/bits";
+import { PageHeader, Panel, Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, useRefreshAll, CH, chColor, TONE_OPTIONS, ago, errMsg, type Ch } from "@/components/bits";
 
 const STATUSES = ["draft", "active", "paused", "completed"] as const;
 
@@ -33,6 +33,7 @@ export default function CampaignDetail() {
   const [confirmDel, setConfirmDel] = useState(false);
   const [stepEdit, setStepEdit] = useState<SequenceStep | "new" | null>(null);
   const [enroll, setEnroll] = useState(false);
+  const [preview, setPreview] = useState<SequenceStep | null>(null);
   const c = q.data;
 
   if (q.isLoading) return <div className="p-8"><Rows n={6} h={70} /></div>;
@@ -91,7 +92,7 @@ export default function CampaignDetail() {
               <Empty icon={Workflow} title="No steps yet" body="Let the AI draft a sequence from your pitch, or add steps by hand." />
             ) : (
               <ol className="relative p-4">
-                {steps.map((s, i) => <StepRow key={s.id} s={s} i={i} last={i === steps.length - 1} campaignId={id} prev={steps[i - 1]} next={steps[i + 1]} onEdit={() => setStepEdit(s)} />)}
+                {steps.map((s, i) => <StepRow key={s.id} s={s} i={i} last={i === steps.length - 1} campaignId={id} prev={steps[i - 1]} next={steps[i + 1]} onEdit={() => setStepEdit(s)} onPreview={() => setPreview(s)} />)}
               </ol>
             )}
           </Panel>
@@ -114,6 +115,7 @@ export default function CampaignDetail() {
       </div>
 
       {stepEdit && <StepDialog campaignId={id} step={stepEdit === "new" ? null : stepEdit} onClose={() => setStepEdit(null)} />}
+      {preview && <PreviewDialog campaignId={id} step={preview} leads={c.leads} onClose={() => setPreview(null)} />}
       {enroll && <EnrollDialog campaignId={id} enrolled={c.leads.map((l) => l.id)} onClose={() => setEnroll(false)} />}
       <AlertDialog open={confirmDel} onOpenChange={setConfirmDel}>
         <AlertDialogContent>
@@ -156,7 +158,7 @@ function SettingsForm({ c, onSave, saving }: { c: CampaignLike; onSave: (d: { na
   );
 }
 
-function StepRow({ s, i, last, campaignId, prev, next, onEdit }: { s: SequenceStep; i: number; last: boolean; campaignId: number; prev?: SequenceStep; next?: SequenceStep; onEdit: () => void }) {
+function StepRow({ s, i, last, campaignId, prev, next, onEdit, onPreview }: { s: SequenceStep; i: number; last: boolean; campaignId: number; prev?: SequenceStep; next?: SequenceStep; onEdit: () => void; onPreview: () => void }) {
   const upd = useUpdateSequenceStep();
   const del = useDeleteSequenceStep();
   const refresh = useRefreshAll();
@@ -180,6 +182,7 @@ function StepRow({ s, i, last, campaignId, prev, next, onEdit }: { s: SequenceSt
           <div className="ml-auto flex gap-0.5 opacity-60 group-hover:opacity-100">
             <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!prev || upd.isPending} onClick={() => swap(prev)} data-testid={`button-step-up-${s.id}`}><ArrowUp className="h-3.5 w-3.5" /></Button>
             <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!next || upd.isPending} onClick={() => swap(next)} data-testid={`button-step-down-${s.id}`}><ArrowDown className="h-3.5 w-3.5" /></Button>
+            {s.channel !== "call" && <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onPreview} title="Preview with a real lead" data-testid={`button-step-preview-${s.id}`}><Eye className="h-3.5 w-3.5" /></Button>}
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onEdit} data-testid={`button-step-edit-${s.id}`}><Pencil className="h-3.5 w-3.5" /></Button>
             <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-destructive" disabled={del.isPending} onClick={() => del.mutate({ id: campaignId, stepId: s.id }, { onSuccess: refresh })} data-testid={`button-step-delete-${s.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
           </div>
@@ -222,6 +225,40 @@ function StepDialog({ campaignId, step, onClose }: { campaignId: number; step: S
             <p className="mt-1 font-mono text-[10px] text-muted-foreground">{"{{firstName}} {{company}} {{title}}"}</p></div>
         </div>
         <DialogFooter><Button onClick={save} disabled={!f.template.trim() || pending} data-testid="button-save-step">{pending ? "Saving..." : "Save step"}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PreviewDialog({ campaignId, step, leads, onClose }: { campaignId: number; step: SequenceStep; leads: Lead[]; onClose: () => void }) {
+  const others = useListLeads();
+  const pool = leads.length ? leads : (others.data ?? []);
+  const [leadId, setLeadId] = useState<string>("");
+  const [out, setOut] = useState<StepPreview | null>(null);
+  const run = usePreviewSequenceStep();
+  const { toast } = useToast();
+  const go = (lid: string) => {
+    setLeadId(lid);
+    setOut(null);
+    if (lid) run.mutate({ id: campaignId, stepId: step.id, data: { leadId: Number(lid) } }, { onSuccess: setOut, onError: (e) => toast({ title: "Preview failed", description: errMsg(e), variant: "destructive" }) });
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle className="font-display text-xl">Preview step {step.stepOrder} with a real lead</DialogTitle></DialogHeader>
+        <select className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm" value={leadId} onChange={(e) => go(e.target.value)} data-testid="select-preview-lead">
+          <option value="">{pool.length ? "Choose a lead" : "Add leads first"}</option>
+          {pool.map((l) => <option key={l.id} value={l.id}>{l.firstName} {l.lastName}{l.company ? ` (${l.company})` : ""}</option>)}
+        </select>
+        {run.isPending && <AiWorking text="Personalizing this step the way it will be sent" />}
+        {out && !run.isPending && (
+          <div className="pop rounded-lg border border-border bg-background p-4" data-testid="panel-step-preview">
+            <ChannelTag channel={step.channel as Ch} />
+            {out.subject && <div className="mt-2 text-sm font-semibold">{out.subject}</div>}
+            <p className="mt-1 whitespace-pre-wrap text-sm">{out.body}</p>
+          </div>
+        )}
+        <DialogFooter><Button variant="outline" disabled={!leadId || run.isPending} onClick={() => go(leadId)} data-testid="button-regenerate-preview">Regenerate</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );

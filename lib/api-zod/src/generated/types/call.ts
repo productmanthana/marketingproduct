@@ -5,6 +5,7 @@
  * Outreach Autopilot API
  * OpenAPI spec version: 0.1.0
  */
+import type { CallMode } from './callMode';
 import type { CallStatus } from './callStatus';
 
 export interface Call {
@@ -32,6 +33,11 @@ export interface Call {
   nextStep?: string | null;
   /** @nullable */
   durationSeconds?: number | null;
+  mode?: CallMode;
+  /** @nullable */
+  transcript?: string | null;
+  /** @nullable */
+  recordingUrl?: string | null;
   /** @nullable */
   scheduledAt?: Date | null;
   createdAt: Date;

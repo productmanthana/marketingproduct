@@ -32,6 +32,15 @@ export interface Lead {
   /** @nullable */
   notes?: string | null;
   /** @nullable */
+  website?: string | null;
+  /**
+     * 0-100 AI fit against the ideal customer profile
+     * @nullable
+     */
+  fitScore?: number | null;
+  /** @nullable */
+  fitReason?: string | null;
+  /** @nullable */
   lastContactedAt?: Date | null;
   createdAt: Date;
 }

@@ -9,9 +9,11 @@ import type { Activity } from './activity';
 import type { Call } from './call';
 import type { Conversation } from './conversation';
 import type { Lead } from './lead';
+import type { Task } from './task';
 
 export type LeadDetail = Lead & {
   conversations: Conversation[];
   calls: Call[];
   activity: Activity[];
+  tasks: Task[];
 };

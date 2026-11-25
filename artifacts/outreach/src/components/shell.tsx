@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutGrid, Send, Users, Inbox, PhoneCall, Settings, Radar } from "lucide-react";
+import { LayoutGrid, Send, Users, Inbox, PhoneCall, Settings, Radar, CheckSquare } from "lucide-react";
 import { useGetDashboardSummary, useGetSettings } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 
@@ -8,8 +8,9 @@ const NAV = [
   { href: "/", label: "Mission", icon: LayoutGrid },
   { href: "/campaigns", label: "Campaigns", icon: Send },
   { href: "/leads", label: "Leads", icon: Users },
-  { href: "/inbox", label: "Inbox", icon: Inbox, badge: true },
+  { href: "/inbox", label: "Inbox", icon: Inbox, badge: "needsReview" as const },
   { href: "/calls", label: "Calls", icon: PhoneCall },
+  { href: "/tasks", label: "Tasks", icon: CheckSquare, badge: "openTasks" as const },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -39,7 +40,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 {active && <span className="absolute left-0 top-2 bottom-2 hidden w-[3px] rounded-r bg-sidebar-primary md:block" />}
                 <I className="h-4 w-4" />
                 <span className="flex-1">{n.label}</span>
-                {n.badge && !!sum?.needsReview && <span className="rounded-full bg-sidebar-primary px-1.5 font-mono text-[10px] text-sidebar-primary-foreground">{sum.needsReview}</span>}
+                {n.badge && !!sum?.[n.badge] && <span className="rounded-full bg-sidebar-primary px-1.5 font-mono text-[10px] text-sidebar-primary-foreground" data-testid={`badge-${n.badge}`}>{sum[n.badge]}</span>}
               </Link>
             );
           })}

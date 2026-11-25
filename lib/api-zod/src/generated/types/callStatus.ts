@@ -11,6 +11,7 @@ export type CallStatus = typeof CallStatus[keyof typeof CallStatus];
 
 export const CallStatus = {
   scheduled: 'scheduled',
+  in_progress: 'in_progress',
   completed: 'completed',
   no_answer: 'no_answer',
 } as const;

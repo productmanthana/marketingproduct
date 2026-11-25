@@ -6,6 +6,7 @@ import {
   boolean,
   timestamp,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const campaignsTable = pgTable("campaigns", {
   id: serial("id").primaryKey(),
@@ -50,6 +51,11 @@ export const leadsTable = pgTable("leads", {
   nextStepAt: timestamp("next_step_at", { withTimezone: true }),
   notes: text("notes"),
   lastContactedAt: timestamp("last_contacted_at", { withTimezone: true }),
+  website: text("website"),
+  fitScore: integer("fit_score"),
+  fitReason: text("fit_reason"),
+  linkedinProviderId: text("linkedin_provider_id"),
+  unsubscribeToken: text("unsubscribe_token").notNull().default(sql`gen_random_uuid()::text`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -66,6 +72,8 @@ export const outreachConversationsTable = pgTable("outreach_conversations", {
   sentiment: text("sentiment"),
   subject: text("subject"),
   unread: boolean("unread").notNull().default(false),
+  mailboxId: integer("mailbox_id"),
+  externalThreadId: text("external_thread_id"),
   lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -79,6 +87,11 @@ export const outreachMessagesTable = pgTable("outreach_messages", {
   subject: text("subject"),
   body: text("body").notNull(),
   author: text("author").notNull(),
+  deliveryStatus: text("delivery_status").notNull().default("recorded"),
+  deliveryError: text("delivery_error"),
+  externalId: text("external_id"),
+  trackingToken: text("tracking_token").notNull().default(sql`gen_random_uuid()::text`),
+  openedAt: timestamp("opened_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -98,6 +111,10 @@ export const callsTable = pgTable("calls", {
   summary: text("summary"),
   nextStep: text("next_step"),
   durationSeconds: integer("duration_seconds"),
+  mode: text("mode").notNull().default("manual"),
+  providerCallId: text("provider_call_id"),
+  transcript: text("transcript"),
+  recordingUrl: text("recording_url"),
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -119,6 +136,66 @@ export const settingsTable = pgTable("settings", {
   defaultTone: text("default_tone").notNull().default("friendly and concise"),
   globalAutoReply: boolean("global_auto_reply").notNull().default(true),
   escalateNegative: boolean("escalate_negative").notNull().default(true),
+  icpDescription: text("icp_description").notNull().default(""),
+  publicBaseUrl: text("public_base_url").notNull().default(""),
+  trackOpens: boolean("track_opens").notNull().default(true),
+  unsubscribeFooter: boolean("unsubscribe_footer").notNull().default(true),
+  sendWindowStart: integer("send_window_start").notNull().default(8),
+  sendWindowEnd: integer("send_window_end").notNull().default(18),
+  sendWeekdaysOnly: boolean("send_weekdays_only").notNull().default(true),
+  timezone: text("timezone").notNull().default("UTC"),
+  unipileDsn: text("unipile_dsn").notNull().default(""),
+  unipileApiKey: text("unipile_api_key").notNull().default(""),
+  unipileAccountId: text("unipile_account_id").notNull().default(""),
+  linkedinDailyLimit: integer("linkedin_daily_limit").notNull().default(25),
+  voiceApiBaseUrl: text("voice_api_base_url").notNull().default("https://api.vapi.ai"),
+  voiceApiKey: text("voice_api_key").notNull().default(""),
+  voicePhoneNumberId: text("voice_phone_number_id").notNull().default(""),
+  voiceName: text("voice_name").notNull().default(""),
+});
+
+export const mailboxesTable = pgTable("mailboxes", {
+  id: serial("id").primaryKey(),
+  label: text("label").notNull(),
+  fromName: text("from_name").notNull(),
+  fromEmail: text("from_email").notNull(),
+  smtpHost: text("smtp_host").notNull(),
+  smtpPort: integer("smtp_port").notNull().default(587),
+  smtpSecure: boolean("smtp_secure").notNull().default(false),
+  smtpUser: text("smtp_user").notNull(),
+  smtpPass: text("smtp_pass").notNull(),
+  imapHost: text("imap_host"),
+  imapPort: integer("imap_port").notNull().default(993),
+  imapSecure: boolean("imap_secure").notNull().default(true),
+  imapUser: text("imap_user"),
+  imapPass: text("imap_pass"),
+  dailyLimit: integer("daily_limit").notNull().default(50),
+  warmupEnabled: boolean("warmup_enabled").notNull().default(true),
+  warmupStart: integer("warmup_start").notNull().default(5),
+  warmupIncrement: integer("warmup_increment").notNull().default(3),
+  sentToday: integer("sent_today").notNull().default(0),
+  sentDate: text("sent_date"),
+  active: boolean("active").notNull().default(true),
+  lastUid: integer("last_uid"),
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const tasksTable = pgTable("tasks", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").references(() => leadsTable.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  done: boolean("done").notNull().default(false),
+  source: text("source").notNull().default("manual"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const usageCountersTable = pgTable("usage_counters", {
+  key: text("key").primaryKey(),
+  day: text("day").notNull(),
+  count: integer("count").notNull().default(0),
 });
 
 export type CampaignRow = typeof campaignsTable.$inferSelect;
@@ -128,3 +205,5 @@ export type ConversationRow = typeof outreachConversationsTable.$inferSelect;
 export type MessageRow = typeof outreachMessagesTable.$inferSelect;
 export type CallRow = typeof callsTable.$inferSelect;
 export type SettingsRow = typeof settingsTable.$inferSelect;
+export type MailboxRow = typeof mailboxesTable.$inferSelect;
+export type TaskRow = typeof tasksTable.$inferSelect;

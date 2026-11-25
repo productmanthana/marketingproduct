@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearch } from "wouter";
-import { Bot, Inbox as InboxIcon, Send, Sparkles, FlaskConical, User } from "lucide-react";
+import { Bot, Inbox as InboxIcon, Send, Sparkles, FlaskConical, User, RefreshCw, Eye, AlertTriangle } from "lucide-react";
 import {
-  useListConversations, useGetConversation, getGetConversationQueryKey, useUpdateConversation, useSendMessage, useReceiveInbound, useDraftAiReply,
+  useListConversations, useGetConversation, getGetConversationQueryKey, useUpdateConversation, useSendMessage, useReceiveInbound, useDraftAiReply, useSyncMailboxes,
 } from "@workspace/api-client-react";
 import type { AiDraft, Channel, ConversationStatus, Message } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, ago, label, chColor, useRefreshAll, type Ch } from "@/components/bits";
+import { Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, ago, label, chColor, errMsg, useRefreshAll, type Ch } from "@/components/bits";
 
 const STATUSES = ["open", "auto_replied", "needs_review", "closed"];
 
@@ -20,6 +20,9 @@ export default function Inbox() {
   const [status, setStatus] = useState("");
   const [sel, setSel] = useState<number | null>(initial);
   const q = useListConversations({ channel: (channel || undefined) as Channel | undefined, status: (status || undefined) as ConversationStatus | undefined });
+  const sync = useSyncMailboxes();
+  const refresh = useRefreshAll();
+  const { toast } = useToast();
 
   return (
     <div className="flex h-[100dvh] flex-col">
@@ -27,6 +30,9 @@ export default function Inbox() {
         <h1 className="font-display mr-4 text-2xl font-bold">Inbox</h1>
         <Seg value={channel} onChange={setChannel} opts={[["", "All"], ["email", "Email"], ["linkedin", "LinkedIn"]]} id="channel" />
         <Seg value={status} onChange={setStatus} opts={[["", "Any"], ...STATUSES.map((s) => [s, label(s)] as [string, string])]} id="status" />
+        <Button size="sm" variant="outline" className="ml-auto" disabled={sync.isPending} data-testid="button-check-replies"
+          onClick={() => sync.mutate(undefined, { onSuccess: (r) => { refresh(); toast({ title: r.mailboxes ? `${r.newReplies} new replies` : "No mailbox with reply sync", description: r.errors.length ? r.errors.join("; ") : r.mailboxes ? undefined : "Add IMAP details to a mailbox in Settings.", variant: r.errors.length ? "destructive" : undefined }); } })}>
+          <RefreshCw className={cn("mr-1 h-3.5 w-3.5", sync.isPending && "animate-spin")} />Check replies</Button>
       </div>
       <div className="flex min-h-0 flex-1">
         <div className={cn("w-full shrink-0 overflow-y-auto border-r border-border md:w-[340px]", sel && "hidden md:block")}>
@@ -79,7 +85,19 @@ function Bubble({ m, i }: { m: Message; i: number }) {
         <div className="mb-1 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider opacity-70"><I className="h-3 w-3" />{a.name}<span>· {ago(m.createdAt)}</span></div>
         {m.subject && <div className="mb-1 text-sm font-semibold">{m.subject}</div>}
         <p className="whitespace-pre-wrap text-sm leading-relaxed">{m.body}</p>
+        {out && <Delivery m={m} />}
       </div>
+    </div>
+  );
+}
+
+function Delivery({ m }: { m: Message }) {
+  const base = "mt-2 flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider opacity-70";
+  if (m.deliveryStatus === "failed") return <div className={cn(base, "text-destructive opacity-100")} title={m.deliveryError ?? ""} data-testid={`delivery-failed-${m.id}`}><AlertTriangle className="h-3 w-3" />Not delivered: {m.deliveryError}</div>;
+  return (
+    <div className={base} data-testid={`delivery-${m.deliveryStatus}-${m.id}`}>
+      {m.deliveryStatus === "sent" ? `Delivered via ${m.channel === "email" ? "mailbox" : "LinkedIn"}` : "Saved in-app (no provider connected)"}
+      {m.openedAt && <span className="ml-1 inline-flex items-center gap-1"><Eye className="h-3 w-3" />opened {ago(m.openedAt)}</span>}
     </div>
   );
 }
@@ -147,7 +165,7 @@ function Thread({ id, onBack }: { id: number; onBack: () => void }) {
             <Sparkles className="mr-1.5 h-4 w-4 text-primary" />{draft.isPending ? "Drafting..." : "Draft with AI"}
           </Button>
           <Button className="ml-auto" disabled={!body.trim() || send.isPending} data-testid="button-send-reply"
-            onClick={() => send.mutate({ id, data: { body, subject: isEmail && subject ? subject : undefined } }, { onSuccess: () => { setBody(""); setAi(null); refresh(); toast({ title: "Sent", description: `Delivered via ${c.channel}` }); } })}>
+            onClick={() => send.mutate({ id, data: { body, subject: isEmail && subject ? subject : undefined } }, { onSuccess: () => { setBody(""); setAi(null); refresh(); toast({ title: "Sent" }); }, onError: (e) => toast({ title: "Send failed", description: errMsg(e), variant: "destructive" }) })}>
             <Send className="mr-1.5 h-4 w-4" />{send.isPending ? "Sending..." : "Send"}
           </Button>
         </div>
