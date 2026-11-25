@@ -1,0 +1,860 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Outreach Autopilot API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+  - name: leads
+  - name: campaigns
+  - name: conversations
+  - name: calls
+  - name: dashboard
+  - name: settings
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /leads:
+    get:
+      operationId: listLeads
+      tags: [leads]
+      parameters:
+        - { name: search, in: query, required: false, schema: { type: string } }
+        - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/LeadStatus" } }
+        - { name: campaignId, in: query, required: false, schema: { type: integer } }
+      responses:
+        "200":
+          description: Leads
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Lead" } }
+    post:
+      operationId: createLead
+      tags: [leads]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeadInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Lead" }
+  /leads/import:
+    post:
+      operationId: importLeads
+      tags: [leads]
+      summary: Bulk import leads (e.g. parsed from CSV)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeadImportInput" }
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportResult" }
+  /leads/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getLead
+      tags: [leads]
+      responses:
+        "200":
+          description: Lead detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LeadDetail" }
+        "404": { description: Not found }
+    patch:
+      operationId: updateLead
+      tags: [leads]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeadUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Lead" }
+    delete:
+      operationId: deleteLead
+      tags: [leads]
+      responses:
+        "204": { description: Deleted }
+
+  /campaigns:
+    get:
+      operationId: listCampaigns
+      tags: [campaigns]
+      responses:
+        "200":
+          description: Campaigns
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Campaign" } }
+    post:
+      operationId: createCampaign
+      tags: [campaigns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+  /campaigns/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getCampaign
+      tags: [campaigns]
+      responses:
+        "200":
+          description: Campaign detail with sequence steps
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignDetail" }
+        "404": { description: Not found }
+    patch:
+      operationId: updateCampaign
+      tags: [campaigns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+    delete:
+      operationId: deleteCampaign
+      tags: [campaigns]
+      responses:
+        "204": { description: Deleted }
+  /campaigns/{id}/steps:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: addSequenceStep
+      tags: [campaigns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SequenceStepInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SequenceStep" }
+  /campaigns/{id}/steps/{stepId}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+      - { name: stepId, in: path, required: true, schema: { type: integer } }
+    patch:
+      operationId: updateSequenceStep
+      tags: [campaigns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SequenceStepUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SequenceStep" }
+    delete:
+      operationId: deleteSequenceStep
+      tags: [campaigns]
+      responses:
+        "204": { description: Deleted }
+  /campaigns/{id}/leads:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: enrollLeads
+      tags: [campaigns]
+      summary: Assign leads to this campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnrollLeadsInput" }
+      responses:
+        "200":
+          description: Campaign after enrollment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+  /campaigns/{id}/generate-sequence:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: generateCampaignSequence
+      tags: [campaigns]
+      summary: Use AI to write a multichannel sequence (replaces existing steps)
+      responses:
+        "200":
+          description: Campaign detail with new steps
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignDetail" }
+  /campaigns/{id}/run:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: runCampaign
+      tags: [campaigns]
+      summary: Activate campaign and execute all due sequence steps now (AI personalizes each message, schedules calls)
+      responses:
+        "200":
+          description: Run result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunResult" }
+
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [conversations]
+      parameters:
+        - { name: channel, in: query, required: false, schema: { $ref: "#/components/schemas/Channel" } }
+        - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/ConversationStatus" } }
+      responses:
+        "200":
+          description: Conversations
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Conversation" } }
+  /conversations/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getConversation
+      tags: [conversations]
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversationDetail" }
+        "404": { description: Not found }
+    patch:
+      operationId: updateConversation
+      tags: [conversations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConversationUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Conversation" }
+  /conversations/{id}/messages:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: sendMessage
+      tags: [conversations]
+      summary: Send an outbound message manually
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MessageInput" }
+      responses:
+        "201":
+          description: Sent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Message" }
+  /conversations/{id}/inbound:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: receiveInbound
+      tags: [conversations]
+      summary: Record an inbound reply from the lead. If auto-reply is on, AI classifies and replies automatically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InboundInput" }
+      responses:
+        "200":
+          description: Conversation after processing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversationDetail" }
+  /conversations/{id}/ai-draft:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: draftAiReply
+      tags: [conversations]
+      summary: Generate an AI reply draft without sending
+      responses:
+        "200":
+          description: Draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiDraft" }
+  /webhooks/inbound:
+    post:
+      operationId: inboundWebhook
+      tags: [conversations]
+      summary: Generic inbound webhook for email/LinkedIn/SMS providers. Matches the lead by email, LinkedIn URL or phone.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookInboundInput" }
+      responses:
+        "200":
+          description: Processed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversationDetail" }
+        "404": { description: Lead not found }
+
+  /calls:
+    get:
+      operationId: listCalls
+      tags: [calls]
+      parameters:
+        - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/CallStatus" } }
+      responses:
+        "200":
+          description: Calls
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Call" } }
+    post:
+      operationId: createCall
+      tags: [calls]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Call" }
+  /calls/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getCall
+      tags: [calls]
+      responses:
+        "200":
+          description: Call
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Call" }
+        "404": { description: Not found }
+    patch:
+      operationId: updateCall
+      tags: [calls]
+      summary: Log call outcome and notes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Call" }
+  /calls/{id}/script:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: generateCallScript
+      tags: [calls]
+      responses:
+        "200":
+          description: Call with AI script
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Call" }
+  /calls/{id}/summarize:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: summarizeCall
+      tags: [calls]
+      summary: AI summarizes call notes, sets outcome and next step, and queues a follow-up email
+      responses:
+        "200":
+          description: Call with summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Call" }
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardSummary" }
+  /dashboard/channels:
+    get:
+      operationId: getChannelPerformance
+      tags: [dashboard]
+      responses:
+        "200":
+          description: Per-channel stats
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ChannelStat" } }
+  /dashboard/funnel:
+    get:
+      operationId: getLeadFunnel
+      tags: [dashboard]
+      responses:
+        "200":
+          description: Lead counts by status
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/FunnelStage" } }
+  /dashboard/activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer } }
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Activity" } }
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+    put:
+      operationId: updateSettings
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SettingsInput" }
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status: { type: string }
+      required: [status]
+
+    Channel:
+      type: string
+      enum: [email, linkedin, call]
+    LeadStatus:
+      type: string
+      enum: [new, contacted, replied, interested, meeting_booked, not_interested, unsubscribed]
+    CampaignStatus:
+      type: string
+      enum: [draft, active, paused, completed]
+    ConversationStatus:
+      type: string
+      enum: [open, auto_replied, needs_review, closed]
+    CallStatus:
+      type: string
+      enum: [scheduled, completed, no_answer]
+    Sentiment:
+      type: string
+      enum: [positive, neutral, negative, objection, out_of_office, unsubscribe]
+
+    Lead:
+      type: object
+      required: [id, firstName, lastName, status, createdAt]
+      properties:
+        id: { type: integer }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        linkedinUrl: { type: ["string", "null"] }
+        company: { type: ["string", "null"] }
+        title: { type: ["string", "null"] }
+        industry: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+        campaignId: { type: ["integer", "null"] }
+        campaignName: { type: ["string", "null"] }
+        currentStep: { type: integer }
+        notes: { type: ["string", "null"] }
+        lastContactedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    LeadDetail:
+      allOf:
+        - $ref: "#/components/schemas/Lead"
+        - type: object
+          required: [conversations, calls, activity]
+          properties:
+            conversations: { type: array, items: { $ref: "#/components/schemas/Conversation" } }
+            calls: { type: array, items: { $ref: "#/components/schemas/Call" } }
+            activity: { type: array, items: { $ref: "#/components/schemas/Activity" } }
+    LeadInput:
+      type: object
+      required: [firstName, lastName]
+      properties:
+        firstName: { type: string, minLength: 1 }
+        lastName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        linkedinUrl: { type: string }
+        company: { type: string }
+        title: { type: string }
+        industry: { type: string }
+        notes: { type: string }
+        campaignId: { type: integer }
+    LeadUpdate:
+      type: object
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        linkedinUrl: { type: string }
+        company: { type: string }
+        title: { type: string }
+        industry: { type: string }
+        notes: { type: string }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+        campaignId: { type: ["integer", "null"] }
+    LeadImportInput:
+      type: object
+      required: [leads]
+      properties:
+        campaignId: { type: integer }
+        leads: { type: array, items: { $ref: "#/components/schemas/LeadInput" } }
+    ImportResult:
+      type: object
+      required: [imported, skipped]
+      properties:
+        imported: { type: integer }
+        skipped: { type: integer }
+
+    Campaign:
+      type: object
+      required: [id, name, status, autoReply, replyTone, goal, leadCount, sentCount, replyCount, meetingCount, stepCount, channels, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/CampaignStatus" }
+        goal: { type: string, description: "What the campaign is trying to achieve, e.g. book a 20 minute demo" }
+        productPitch: { type: ["string", "null"], description: "What you sell and why it matters; used by AI" }
+        autoReply: { type: boolean, description: "If true, AI replies to inbound messages automatically" }
+        replyTone: { type: string }
+        meetingLink: { type: ["string", "null"] }
+        leadCount: { type: integer }
+        sentCount: { type: integer }
+        replyCount: { type: integer }
+        meetingCount: { type: integer }
+        stepCount: { type: integer }
+        channels: { type: array, items: { $ref: "#/components/schemas/Channel" } }
+        createdAt: { type: string, format: date-time }
+    CampaignDetail:
+      allOf:
+        - $ref: "#/components/schemas/Campaign"
+        - type: object
+          required: [steps, leads]
+          properties:
+            steps: { type: array, items: { $ref: "#/components/schemas/SequenceStep" } }
+            leads: { type: array, items: { $ref: "#/components/schemas/Lead" } }
+    CampaignInput:
+      type: object
+      required: [name, goal]
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        goal: { type: string }
+        productPitch: { type: string }
+        autoReply: { type: boolean }
+        replyTone: { type: string }
+        meetingLink: { type: string }
+    CampaignUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        goal: { type: string }
+        productPitch: { type: string }
+        autoReply: { type: boolean }
+        replyTone: { type: string }
+        meetingLink: { type: string }
+        status: { $ref: "#/components/schemas/CampaignStatus" }
+    SequenceStep:
+      type: object
+      required: [id, campaignId, stepOrder, channel, delayDays, template]
+      properties:
+        id: { type: integer }
+        campaignId: { type: integer }
+        stepOrder: { type: integer }
+        channel: { $ref: "#/components/schemas/Channel" }
+        delayDays: { type: integer }
+        subject: { type: ["string", "null"] }
+        template: { type: string, description: "Message template or call objective. Supports {{firstName}}, {{company}}, {{title}}" }
+    SequenceStepInput:
+      type: object
+      required: [channel, template]
+      properties:
+        channel: { $ref: "#/components/schemas/Channel" }
+        delayDays: { type: integer }
+        subject: { type: string }
+        template: { type: string }
+    SequenceStepUpdate:
+      type: object
+      properties:
+        channel: { $ref: "#/components/schemas/Channel" }
+        delayDays: { type: integer }
+        subject: { type: string }
+        template: { type: string }
+        stepOrder: { type: integer }
+    EnrollLeadsInput:
+      type: object
+      required: [leadIds]
+      properties:
+        leadIds: { type: array, items: { type: integer } }
+    RunResult:
+      type: object
+      required: [messagesSent, callsScheduled, leadsProcessed]
+      properties:
+        messagesSent: { type: integer }
+        callsScheduled: { type: integer }
+        leadsProcessed: { type: integer }
+
+    Conversation:
+      type: object
+      required: [id, leadId, leadName, channel, status, unread, messageCount, lastMessageAt]
+      properties:
+        id: { type: integer }
+        leadId: { type: integer }
+        leadName: { type: string }
+        leadCompany: { type: ["string", "null"] }
+        campaignId: { type: ["integer", "null"] }
+        campaignName: { type: ["string", "null"] }
+        channel: { $ref: "#/components/schemas/Channel" }
+        status: { $ref: "#/components/schemas/ConversationStatus" }
+        sentiment: { oneOf: [{ $ref: "#/components/schemas/Sentiment" }, { type: "null" }] }
+        subject: { type: ["string", "null"] }
+        lastMessagePreview: { type: ["string", "null"] }
+        unread: { type: boolean }
+        messageCount: { type: integer }
+        lastMessageAt: { type: string, format: date-time }
+    ConversationDetail:
+      allOf:
+        - $ref: "#/components/schemas/Conversation"
+        - type: object
+          required: [messages, lead]
+          properties:
+            messages: { type: array, items: { $ref: "#/components/schemas/Message" } }
+            lead: { $ref: "#/components/schemas/Lead" }
+    ConversationUpdate:
+      type: object
+      properties:
+        status: { $ref: "#/components/schemas/ConversationStatus" }
+        unread: { type: boolean }
+    Message:
+      type: object
+      required: [id, conversationId, direction, channel, body, author, createdAt]
+      properties:
+        id: { type: integer }
+        conversationId: { type: integer }
+        direction: { type: string, enum: [outbound, inbound] }
+        channel: { $ref: "#/components/schemas/Channel" }
+        subject: { type: ["string", "null"] }
+        body: { type: string }
+        author: { type: string, enum: [user, ai, lead] }
+        createdAt: { type: string, format: date-time }
+    MessageInput:
+      type: object
+      required: [body]
+      properties:
+        subject: { type: string }
+        body: { type: string, minLength: 1 }
+    InboundInput:
+      type: object
+      required: [body]
+      properties:
+        subject: { type: string }
+        body: { type: string, minLength: 1 }
+    WebhookInboundInput:
+      type: object
+      required: [channel, body]
+      properties:
+        channel: { $ref: "#/components/schemas/Channel" }
+        fromEmail: { type: string }
+        fromLinkedinUrl: { type: string }
+        fromPhone: { type: string }
+        subject: { type: string }
+        body: { type: string }
+    AiDraft:
+      type: object
+      required: [body, sentiment, reasoning]
+      properties:
+        subject: { type: ["string", "null"] }
+        body: { type: string }
+        sentiment: { $ref: "#/components/schemas/Sentiment" }
+        reasoning: { type: string }
+
+    Call:
+      type: object
+      required: [id, leadId, leadName, status, createdAt]
+      properties:
+        id: { type: integer }
+        leadId: { type: integer }
+        leadName: { type: string }
+        leadCompany: { type: ["string", "null"] }
+        leadPhone: { type: ["string", "null"] }
+        campaignId: { type: ["integer", "null"] }
+        objective: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/CallStatus" }
+        outcome: { type: ["string", "null"] }
+        script: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        summary: { type: ["string", "null"] }
+        nextStep: { type: ["string", "null"] }
+        durationSeconds: { type: ["integer", "null"] }
+        scheduledAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    CallInput:
+      type: object
+      required: [leadId]
+      properties:
+        leadId: { type: integer }
+        campaignId: { type: integer }
+        objective: { type: string }
+        scheduledAt: { type: string, format: date-time }
+    CallUpdate:
+      type: object
+      properties:
+        status: { $ref: "#/components/schemas/CallStatus" }
+        outcome: { type: string }
+        notes: { type: string }
+        durationSeconds: { type: integer }
+        scheduledAt: { type: string, format: date-time }
+
+    DashboardSummary:
+      type: object
+      required: [totalLeads, activeCampaigns, messagesSent, repliesReceived, replyRate, aiRepliesSent, meetingsBooked, callsScheduled, needsReview]
+      properties:
+        totalLeads: { type: integer }
+        activeCampaigns: { type: integer }
+        messagesSent: { type: integer }
+        repliesReceived: { type: integer }
+        replyRate: { type: number }
+        aiRepliesSent: { type: integer }
+        meetingsBooked: { type: integer }
+        callsScheduled: { type: integer }
+        needsReview: { type: integer }
+    ChannelStat:
+      type: object
+      required: [channel, sent, replies, replyRate]
+      properties:
+        channel: { $ref: "#/components/schemas/Channel" }
+        sent: { type: integer }
+        replies: { type: integer }
+        replyRate: { type: number }
+    FunnelStage:
+      type: object
+      required: [status, count]
+      properties:
+        status: { $ref: "#/components/schemas/LeadStatus" }
+        count: { type: integer }
+    Activity:
+      type: object
+      required: [id, type, description, createdAt]
+      properties:
+        id: { type: integer }
+        type: { type: string, enum: [message_sent, reply_received, ai_reply, call_scheduled, call_completed, status_change, lead_added, campaign_run] }
+        description: { type: string }
+        channel: { oneOf: [{ $ref: "#/components/schemas/Channel" }, { type: "null" }] }
+        leadId: { type: ["integer", "null"] }
+        leadName: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    Settings:
+      type: object
+      required: [senderName, companyName, signature, defaultTone, globalAutoReply]
+      properties:
+        senderName: { type: string }
+        companyName: { type: string }
+        signature: { type: string }
+        defaultTone: { type: string }
+        globalAutoReply: { type: boolean, description: "Master switch; when off no campaign auto-replies" }
+        escalateNegative: { type: boolean, description: "Route objections/negative replies to human review instead of auto replying" }
+    SettingsInput:
+      type: object
+      properties:
+        senderName: { type: string }
+        companyName: { type: string }
+        signature: { type: string }
+        defaultTone: { type: string }
+        globalAutoReply: { type: boolean }
+        escalateNegative: { type: boolean }

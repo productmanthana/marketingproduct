@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Outreach Autopilot"
+description = "A multichannel sales outreach automation platform. Users manage leads and campaigns that sequence cold emails, LinkedIn messages, and cold calls; a unified inbox captures replies and an AI agent automatically drafts and sends contextual responses; AI generates call scripts and summaries; a dashboard shows pipeline and channel performance."
+version = "1.0.0"
+id = "artifacts/outreach"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22096
+
+[services.development]
+run = "pnpm --filter @workspace/outreach run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/outreach", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/outreach/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22096"
+BASE_PATH = "/"
