@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { WaitPicker } from "@/components/wait-picker";
+import { QuickAddPerson } from "@/components/quick-add-person";
 import { PageHeader, Panel, Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, useRefreshAll, CH, chColor, TONE_OPTIONS, ago, errMsg, type Ch } from "@/components/bits";
 
 const STATE_LABEL: Record<string, string> = { draft: "Not started", active: "Sending", paused: "Paused", completed: "Finished" };
@@ -166,7 +167,7 @@ export default function CampaignDetail() {
           <WizardNav onBack={() => go(1)} onNext={() => go(3)} nextDisabled={!steps.length} hint={!steps.length ? "Add at least one message to continue." : null} />
         </FlowSection>}
 
-        {cur === 3 && <FlowSection n={3} title="Who should receive them?" hint="Pick people from your lead list. Need more people? Find them on the Find leads page or add them on the Leads page." done={c.leads.length > 0}
+        {cur === 3 && <FlowSection n={3} title="Who should receive them?" hint="Click Add people to type someone in or pick them from your lead list. Need more? Find them on the Find leads page." done={c.leads.length > 0}
           action={<Button size="sm" variant={c.leads.length ? "outline" : "default"} onClick={() => setEnroll(true)} data-testid="button-enroll-leads"><UserPlus className="mr-1 h-3.5 w-3.5" />Add people</Button>}>
           {!c.leads.length ? (
             <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
@@ -410,13 +411,19 @@ function EnrollDialog({ campaignId, enrolled, onClose }: { campaignId: number; e
   const { toast } = useToast();
   const [sel, setSel] = useState<number[]>([]);
   const avail = (q.data ?? []).filter((l) => !enrolled.includes(l.id));
+  const [typing, setTyping] = useState(false);
+  const showForm = typing || (!q.isLoading && !search && !avail.length);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle className="font-display text-xl">Add people to this campaign</DialogTitle></DialogHeader>
+        {showForm ? <QuickAddPerson campaignId={campaignId} onDone={onClose} /> : (
+          <Button variant="outline" className="w-full" onClick={() => setTyping(true)} data-testid="button-show-quick-add"><Plus className="mr-1.5 h-4 w-4" />Type in a new person</Button>
+        )}
+        <div className="text-xs font-medium text-muted-foreground">Or pick from your lead list</div>
         <Input placeholder="Search by name, company or email" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-enroll-search" />
         <div className="max-h-80 overflow-y-auto rounded-lg border border-border">
-          {q.isLoading ? <Rows n={4} h={36} /> : !avail.length ? <p className="p-6 text-center text-sm text-muted-foreground">No one left to add. Find new people on the Find leads page.</p> : avail.map((l) => (
+          {q.isLoading ? <Rows n={4} h={36} /> : !avail.length ? <p className="p-6 text-center text-sm text-muted-foreground">No one in your lead list yet. Type someone in above, or find people on the Find leads page.</p> : avail.map((l) => (
             <label key={l.id} className="flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-muted/40" data-testid={`row-enroll-${l.id}`}>
               <Checkbox checked={sel.includes(l.id)} onCheckedChange={(v) => setSel((s) => v ? [...s, l.id] : s.filter((x) => x !== l.id))} />
               <span className="flex-1 text-sm">{l.firstName} {l.lastName}<span className="ml-2 text-xs text-muted-foreground">{l.company}</span></span>
