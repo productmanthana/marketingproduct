@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useSearch } from "wouter";
 import { Plus, Search, Sparkles, Upload, Users } from "lucide-react";
-import { useListLeads, useListCampaigns, useCreateLead, useImportLeads, useQualifyLeads } from "@workspace/api-client-react";
+import { useListLeads, useListCampaigns, useCreateLead, useQualifyLeads } from "@workspace/api-client-react";
 import type { LeadInput, LeadStatus } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader, Rows, ErrorBox, Empty, Pill, Initials, AiWorking, ago, label, errMsg, useRefreshAll } from "@/components/bits";
 import { FitBadge } from "@/components/fit-badge";
+import { SpreadsheetPicker, useImportInBatches } from "@/components/spreadsheet-upload";
 
 const STATUSES = ["new", "contacted", "replied", "interested", "meeting_booked", "not_interested", "unsubscribed"];
 const sel = "h-9 rounded-md border border-input bg-card px-2 text-sm capitalize";
@@ -39,7 +40,7 @@ export default function Leads() {
           })}>
           <Sparkles className="mr-1 h-4 w-4 text-primary" />{qualify.isPending ? "Scoring..." : unscored ? `Score ${unscored} with AI` : "Rescore all"}
         </Button>
-        <Button variant="outline" onClick={() => setImp(true)} data-testid="button-import-leads"><Upload className="mr-1 h-4 w-4" />Import CSV</Button>
+        <Button variant="outline" onClick={() => setImp(true)} data-testid="button-import-leads"><Upload className="mr-1 h-4 w-4" />Import spreadsheet</Button>
         <Button onClick={() => setAdd(true)} data-testid="button-add-lead"><Plus className="mr-1 h-4 w-4" />Add lead</Button>
       </PageHeader>
       <div className="space-y-4 p-6 md:p-8">
@@ -56,8 +57,8 @@ export default function Leads() {
         </div>
         <div className="overflow-hidden rounded-xl border border-card-border bg-card">
           {q.isLoading ? <Rows n={8} h={40} /> : q.isError ? <ErrorBox onRetry={() => q.refetch()} /> : !q.data?.length ? (
-            <Empty icon={Users} title={search || status || campaignId ? "No matches" : "No leads yet"} body="Add a lead by hand or paste a CSV to import hundreds at once.">
-              <Button size="sm" onClick={() => setImp(true)} data-testid="button-empty-import">Import CSV</Button>
+            <Empty icon={Users} title={search || status || campaignId ? "No matches" : "No leads yet"} body="Add a lead by hand or upload an Excel/CSV file to import hundreds at once.">
+              <Button size="sm" onClick={() => setImp(true)} data-testid="button-empty-import">Import spreadsheet</Button>
             </Empty>
           ) : (
             <div className="overflow-x-auto">
@@ -145,32 +146,38 @@ function parseCsv(text: string): LeadInput[] {
 function ImportLeads({ onClose, campaigns }: { onClose: () => void; campaigns: C[] }) {
   const [text, setText] = useState("");
   const [cid, setCid] = useState("");
-  const imp = useImportLeads();
+  const imp = useImportInBatches();
   const refresh = useRefreshAll();
   const { toast } = useToast();
-  const parsed = useMemo(() => parseCsv(text), [text]);
+  const [fileLeads, setFileLeads] = useState<LeadInput[]>([]);
+  const pasted = useMemo(() => parseCsv(text), [text]);
+  const parsed = fileLeads.length ? fileLeads : pasted;
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle className="font-display text-xl">Import leads from CSV</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="font-display text-xl">Import leads</DialogTitle></DialogHeader>
+        <SpreadsheetPicker onParsed={setFileLeads} />
+        {!fileLeads.length && <>
+        <div className="text-xs font-medium text-muted-foreground">Or paste CSV text</div>
         <p className="font-mono text-[11px] text-muted-foreground">firstName,lastName,email,phone,linkedinUrl,company,title,industry,website</p>
         <Textarea rows={8} className="font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} placeholder={"firstName,lastName,email,phone,linkedinUrl,company,title,industry\nMarta,Okafor,marta@lumenfreight.io,+14155550142,,Lumen Freight,VP Ops,Logistics"} data-testid="input-csv" />
-        {!!parsed.length && (
+        {!!pasted.length && (
           <div className="max-h-40 overflow-auto rounded-lg border border-border text-xs">
-            {parsed.slice(0, 8).map((l, i) => <div key={i} className="grid grid-cols-3 gap-2 border-b border-border px-3 py-1.5 last:border-0"><b>{l.firstName} {l.lastName}</b><span>{l.email}</span><span className="text-muted-foreground">{l.company}</span></div>)}
-            {parsed.length > 8 && <div className="px-3 py-1.5 text-muted-foreground">+ {parsed.length - 8} more</div>}
+            {pasted.slice(0, 8).map((l, i) => <div key={i} className="grid grid-cols-3 gap-2 border-b border-border px-3 py-1.5 last:border-0"><b>{l.firstName} {l.lastName}</b><span>{l.email}</span><span className="text-muted-foreground">{l.company}</span></div>)}
+            {pasted.length > 8 && <div className="px-3 py-1.5 text-muted-foreground">+ {pasted.length - 8} more</div>}
           </div>
         )}
+        </>}
         <div className="flex items-center gap-2"><Label className="text-xs">Enroll into</Label>
           <select className={sel} value={cid} onChange={(e) => setCid(e.target.value)} data-testid="select-import-campaign">
             <option value="">No campaign</option>{campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select></div>
         <DialogFooter>
           <Button disabled={!parsed.length || imp.isPending} data-testid="button-confirm-import"
-            onClick={() => imp.mutate({ data: { leads: parsed, campaignId: cid ? Number(cid) : undefined } }, {
-              onSuccess: (r) => { refresh(); toast({ title: `Imported ${r.imported} leads`, description: r.skipped ? `${r.skipped} skipped as duplicates or invalid` : undefined }); onClose(); },
-              onError: () => toast({ title: "Import failed", variant: "destructive" }),
-            })}>
+            onClick={() => imp.run(parsed, cid ? Number(cid) : undefined).then(
+              (r) => { refresh(); toast({ title: `Imported ${r.imported} leads`, description: r.skipped ? `${r.skipped} skipped as duplicates or invalid` : undefined }); onClose(); },
+              (e) => toast({ title: "Import failed", description: errMsg(e), variant: "destructive" }),
+            )}>
             {imp.isPending ? "Importing..." : `Import ${parsed.length} leads`}
           </Button>
         </DialogFooter>
