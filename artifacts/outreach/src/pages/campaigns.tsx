@@ -9,11 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { ChannelMessagesDialog } from "@/components/channel-messages-dialog";
 import { PageHeader, Rows, ErrorBox, Empty, ChannelTag, Pill, useRefreshAll, TONE_OPTIONS, type Ch } from "@/components/bits";
 
 export default function Campaigns() {
   const q = useListCampaigns();
   const [open, setOpen] = useState(false);
+  const [chView, setChView] = useState<{ id: number; name: string; channel: Ch } | null>(null);
   return (
     <div>
       <PageHeader eyebrow="Outreach" title="Campaigns">
@@ -35,7 +37,12 @@ export default function Campaigns() {
                   <div className="font-display text-[17px] font-bold">{c.name}</div>
                   <div className="truncate text-xs text-muted-foreground">{c.goal} · {c.stepCount} message{c.stepCount === 1 ? "" : "s"}{c.autoReply && <span className="ml-2 text-primary">AI answers replies</span>}</div>
                 </div>
-                <div className="flex gap-1">{c.channels.map((x) => <ChannelTag key={x} channel={x as Ch} compact />)}</div>
+                <div className="flex gap-1">{c.channels.map((x) => (
+                  <button key={x} type="button" title={`See ${x} messages`} className="rounded-md transition hover:scale-110" data-testid={`button-channel-${c.id}-${x}`}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setChView({ id: c.id, name: c.name, channel: x as Ch }); }}>
+                    <ChannelTag channel={x as Ch} compact />
+                  </button>
+                ))}</div>
                 {[c.leadCount, c.sentCount, c.replyCount, c.meetingCount].map((n, j) => <span key={j} className="hidden text-right font-mono text-sm tnum md:block">{n}</span>)}
                 <div className="text-right text-xs font-medium">{({ draft: "Not started", active: "Sending", paused: "Paused", completed: "Finished" } as Record<string, string>)[c.status] ?? c.status}</div>
               </Link>
@@ -44,6 +51,7 @@ export default function Campaigns() {
         )}
       </div>
       <NewCampaign open={open} onOpenChange={setOpen} />
+      {chView && <ChannelMessagesDialog campaignId={chView.id} campaignName={chView.name} channel={chView.channel} onClose={() => setChView(null)} />}
     </div>
   );
 }

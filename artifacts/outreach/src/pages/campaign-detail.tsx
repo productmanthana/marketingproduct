@@ -4,7 +4,7 @@ import { Link, useLocation, useParams } from "wouter";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronLeft, Lock, Pause, Play, Eye, Pencil, Plus, Rocket, RotateCcw, Sparkles, Trash2, Upload, UserPlus, Users, Workflow } from "lucide-react";
 import {
   useGetCampaign, useUpdateCampaign, useDeleteCampaign, useAddSequenceStep, useUpdateSequenceStep, useDeleteSequenceStep,
-  useEnrollLeads, useGenerateCampaignSequence, useRunCampaign, useListLeads, usePreviewSequenceStep, useWriteCampaignPitch,
+  useEnrollLeads, useGenerateCampaignSequence, useRunCampaign, useListLeads, usePreviewSequenceStep, useWriteCampaignPitch, useUpdateLead,
 } from "@workspace/api-client-react";
 import type { Lead, RunResult, SequenceStep, StepPreview } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,9 @@ export default function CampaignDetail() {
   const [enroll, setEnroll] = useState(false);
   const [preview, setPreview] = useState<SequenceStep | null>(null);
   const [active, setActive] = useState<number | null>(null);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const updLead = useUpdateLead();
+  const [removing, setRemoving] = useState(false);
   const c = q.data;
 
   if (q.isLoading) return <div className="p-8"><Rows n={6} h={70} /></div>;
@@ -181,8 +184,31 @@ export default function CampaignDetail() {
             </div>
           ) : (
             <div className="divide-y divide-border">
+              <div className="flex flex-wrap items-center gap-3 bg-muted/30 px-4 py-2 text-xs" data-testid="bar-select-people">
+                <Checkbox checked={picked.size === c.leads.length ? true : picked.size ? "indeterminate" : false}
+                  onCheckedChange={(v) => setPicked(v === true ? new Set(c.leads.map((l) => l.id)) : new Set())} data-testid="checkbox-select-all-people" />
+                <span className="text-muted-foreground">{picked.size ? `${picked.size} of ${c.leads.length} selected` : `Tick people to stop sending to them · ${c.leads.length} will receive messages`}</span>
+                {picked.size > 0 && (
+                  <Button size="sm" variant="outline" className="ml-auto h-7 text-destructive" disabled={removing} data-testid="button-remove-selected-people"
+                    onClick={async () => {
+                      setRemoving(true);
+                      try {
+                        await Promise.all([...picked].map((lid) => updLead.mutateAsync({ id: lid, data: { campaignId: null } })));
+                        toast({ title: `Removed ${picked.size} from this campaign`, description: "They won't get these messages. They stay in your Leads list." });
+                        setPicked(new Set()); refresh();
+                      } catch (e) { toast({ title: "Could not remove", description: errMsg(e), variant: "destructive" }); }
+                      finally { setRemoving(false); }
+                    }}>
+                    <Trash2 className="mr-1 h-3 w-3" />{removing ? "Removing..." : `Don't send to ${picked.size}`}
+                  </Button>
+                )}
+              </div>
               {c.leads.map((l, i) => (
                 <Link key={l.id} href={`/leads/${l.id}`} className="rise flex items-center gap-3 px-4 py-2.5 hover:bg-muted/40" style={{ animationDelay: `${i * 20}ms` }} data-testid={`link-enrolled-${l.id}`}>
+                  <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="flex">
+                    <Checkbox checked={picked.has(l.id)} data-testid={`checkbox-person-${l.id}`}
+                      onCheckedChange={(v) => setPicked((p) => { const n = new Set(p); if (v === true) n.add(l.id); else n.delete(l.id); return n; })} />
+                  </span>
                   <Initials name={`${l.firstName} ${l.lastName}`} />
                   <div className="min-w-0 flex-1"><div className="text-sm font-medium">{l.firstName} {l.lastName}</div><div className="truncate text-xs text-muted-foreground">{[l.email, l.company].filter(Boolean).join(" · ")}</div></div>
                   <span className="text-xs text-muted-foreground">{(l.currentStep ?? 0) === 0 ? "nothing sent yet" : `got ${Math.min(l.currentStep ?? 0, steps.length)} of ${steps.length} messages`}</span>
