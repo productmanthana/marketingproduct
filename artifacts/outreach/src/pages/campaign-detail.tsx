@@ -18,6 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { WaitPicker, waitLabel } from "@/components/wait-picker";
 import { SendPace, gapLabel } from "@/components/send-pace";
+import { PersonWaitPicker } from "@/components/person-wait-picker";
 import { QuickAddPerson } from "@/components/quick-add-person";
 import { SpreadsheetToCampaign } from "@/components/spreadsheet-upload";
 import { RecipientList } from "@/components/recipient-list";
@@ -214,6 +215,13 @@ export default function CampaignDetail() {
                   </span>
                   <Initials name={`${l.firstName} ${l.lastName}`} />
                   <div className="min-w-0 flex-1"><div className="text-sm font-medium">{l.firstName} {l.lastName}</div><div className="truncate text-xs text-muted-foreground">{[l.email, l.company].filter(Boolean).join(" · ")}</div></div>
+                  {(l.currentStep ?? 0) === 0 && (
+                    <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      Wait
+                      <PersonWaitPicker hours={l.firstWaitHours} disabled={updLead.isPending} testId={`select-person-wait-${l.id}`}
+                        onChange={(h) => updLead.mutate({ id: l.id, data: { firstWaitHours: h } }, { onSuccess: refresh })} />
+                    </span>
+                  )}
                   <span className="text-xs text-muted-foreground">{(l.currentStep ?? 0) === 0 ? "nothing sent yet" : `got ${Math.min(l.currentStep ?? 0, steps.length)} of ${steps.length} messages`}</span>
                   <Pill value={l.status} />
                   {steps.length > 0 && (l.currentStep ?? 0) >= steps.length && (

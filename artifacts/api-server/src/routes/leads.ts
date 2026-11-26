@@ -305,6 +305,8 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     changes.currentStep = 0;
     changes.nextStepAt = null;
   }
+  // A new wait for message 1 is picked up on the next run, before anything was sent.
+  if (parsed.data.firstWaitHours !== undefined && before.currentStep === 0) changes.nextStepAt = null;
   const [lead] = await db
     .update(leadsTable)
     .set(changes)

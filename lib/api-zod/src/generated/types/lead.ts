@@ -9,6 +9,11 @@ import type { LeadStatus } from './leadStatus';
 
 export interface Lead {
   id: number;
+  /**
+     * Hours this person waits for message 1 after Start; null follows the campaign pace
+     * @nullable
+     */
+  firstWaitHours?: number | null;
   firstName: string;
   lastName: string;
   /** @nullable */

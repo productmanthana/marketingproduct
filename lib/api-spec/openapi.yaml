@@ -1005,6 +1005,7 @@ components:
       required: [id, firstName, lastName, status, createdAt]
       properties:
         id: { type: integer }
+        firstWaitHours: { type: ["integer", "null"], description: "Hours this person waits for message 1 after Start; null follows the campaign pace" }
         firstName: { type: string }
         lastName: { type: string }
         email: { type: ["string", "null"] }
@@ -1117,6 +1118,7 @@ components:
         status: { $ref: "#/components/schemas/LeadStatus" }
         campaignId: { type: ["integer", "null"] }
         accountId: { type: ["integer", "null"] }
+        firstWaitHours: { type: ["integer", "null"], description: "Hours this person waits for message 1 after Start; null follows the campaign pace" }
     LeadImportInput:
       type: object
       required: [leads]

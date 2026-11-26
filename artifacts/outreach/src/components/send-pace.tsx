@@ -25,7 +25,7 @@ export function SendPace({ minutes, people, onChange, disabled }: { minutes: num
       </select>
       <span className="text-xs text-muted-foreground">
         {minutes === 0 ? "Everyone gets it together." : people > 1 ? `Spread out so it looks natural; the last person gets it about ${fmt(lastIn)} after the first.` : "Spread out so it looks natural."}
-        {" "}Each person's follow-ups then count from their own message.
+        {" "}A wait set on a person above replaces this for them. Each person's follow-ups then count from their own message.
       </span>
     </div>
   );

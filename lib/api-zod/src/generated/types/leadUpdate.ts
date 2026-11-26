@@ -23,4 +23,9 @@ export interface LeadUpdate {
   campaignId?: number | null;
   /** @nullable */
   accountId?: number | null;
+  /**
+     * Hours this person waits for message 1 after Start; null follows the campaign pace
+     * @nullable
+     */
+  firstWaitHours?: number | null;
 }

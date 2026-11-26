@@ -24,6 +24,7 @@ export const ListLeadsQueryParams = zod.object({
 
 export const ListLeadsResponseItem = zod.object({
   "id": zod.int(),
+  "firstWaitHours": zod.int().nullish().describe('Hours this person waits for message 1 after Start; null follows the campaign pace'),
   "firstName": zod.string(),
   "lastName": zod.string(),
   "email": zod.string().nullish(),
@@ -70,6 +71,7 @@ export const CreateLeadBody = zod.object({
 
 export const CreateLeadResponse = zod.object({
   "id": zod.int(),
+  "firstWaitHours": zod.int().nullish().describe('Hours this person waits for message 1 after Start; null follows the campaign pace'),
   "firstName": zod.string(),
   "lastName": zod.string(),
   "email": zod.string().nullish(),
@@ -205,6 +207,7 @@ export const EnrichLeadParams = zod.object({
 
 export const EnrichLeadResponse = zod.object({
   "id": zod.int(),
+  "firstWaitHours": zod.int().nullish().describe('Hours this person waits for message 1 after Start; null follows the campaign pace'),
   "firstName": zod.string(),
   "lastName": zod.string(),
   "email": zod.string().nullish(),
@@ -237,6 +240,7 @@ export const GetLeadParams = zod.object({
 
 export const GetLeadResponse = zod.object({
   "id": zod.int(),
+  "firstWaitHours": zod.int().nullish().describe('Hours this person waits for message 1 after Start; null follows the campaign pace'),
   "firstName": zod.string(),
   "lastName": zod.string(),
   "email": zod.string().nullish(),
@@ -362,11 +366,13 @@ export const UpdateLeadBody = zod.object({
   "notes": zod.string().optional(),
   "status": zod.enum(['new', 'contacted', 'replied', 'interested', 'meeting_booked', 'not_interested', 'unsubscribed']).optional(),
   "campaignId": zod.int().nullish(),
-  "accountId": zod.int().nullish()
+  "accountId": zod.int().nullish(),
+  "firstWaitHours": zod.int().nullish().describe('Hours this person waits for message 1 after Start; null follows the campaign pace')
 })
 
 export const UpdateLeadResponse = zod.object({
   "id": zod.int(),
+  "firstWaitHours": zod.int().nullish().describe('Hours this person waits for message 1 after Start; null follows the campaign pace'),
   "firstName": zod.string(),
   "lastName": zod.string(),
   "email": zod.string().nullish(),
@@ -491,6 +497,7 @@ export const GetCampaignResponse = zod.object({
 })),
   "leads": zod.array(zod.object({
   "id": zod.int(),
+  "firstWaitHours": zod.int().nullish().describe('Hours this person waits for message 1 after Start; null follows the campaign pace'),
   "firstName": zod.string(),
   "lastName": zod.string(),
   "email": zod.string().nullish(),
@@ -712,6 +719,7 @@ export const GenerateCampaignSequenceResponse = zod.object({
 })),
   "leads": zod.array(zod.object({
   "id": zod.int(),
+  "firstWaitHours": zod.int().nullish().describe('Hours this person waits for message 1 after Start; null follows the campaign pace'),
   "firstName": zod.string(),
   "lastName": zod.string(),
   "email": zod.string().nullish(),
@@ -829,6 +837,7 @@ export const GetConversationResponse = zod.object({
 })),
   "lead": zod.object({
   "id": zod.int(),
+  "firstWaitHours": zod.int().nullish().describe('Hours this person waits for message 1 after Start; null follows the campaign pace'),
   "firstName": zod.string(),
   "lastName": zod.string(),
   "email": zod.string().nullish(),
@@ -959,6 +968,7 @@ export const ReceiveInboundResponse = zod.object({
 })),
   "lead": zod.object({
   "id": zod.int(),
+  "firstWaitHours": zod.int().nullish().describe('Hours this person waits for message 1 after Start; null follows the campaign pace'),
   "firstName": zod.string(),
   "lastName": zod.string(),
   "email": zod.string().nullish(),
@@ -1044,6 +1054,7 @@ export const InboundWebhookResponse = zod.object({
 })),
   "lead": zod.object({
   "id": zod.int(),
+  "firstWaitHours": zod.int().nullish().describe('Hours this person waits for message 1 after Start; null follows the campaign pace'),
   "firstName": zod.string(),
   "lastName": zod.string(),
   "email": zod.string().nullish(),
@@ -1672,6 +1683,7 @@ export const GetAccountResponse = zod.object({
 }).and(zod.object({
   "contacts": zod.array(zod.object({
   "id": zod.int(),
+  "firstWaitHours": zod.int().nullish().describe('Hours this person waits for message 1 after Start; null follows the campaign pace'),
   "firstName": zod.string(),
   "lastName": zod.string(),
   "email": zod.string().nullish(),

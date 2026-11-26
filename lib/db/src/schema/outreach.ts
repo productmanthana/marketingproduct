@@ -53,6 +53,8 @@ export const leadsTable = pgTable("leads", {
   accountId: integer("account_id"),
   currentStep: integer("current_step").notNull().default(0),
   nextStepAt: timestamp("next_step_at", { withTimezone: true }),
+  /** Hours this person waits for message 1 after Start; null follows the campaign's group pace. */
+  firstWaitHours: integer("first_wait_hours"),
   notes: text("notes"),
   lastContactedAt: timestamp("last_contacted_at", { withTimezone: true }),
   website: text("website"),

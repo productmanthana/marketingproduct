@@ -1,7 +1,7 @@
 // How long to wait before a follow-up goes out, stored as days + extra hours.
 export type Wait = { delayDays: number; delayHours: number };
 
-const PRESETS: Array<{ label: string } & Wait> = [
+export const PRESETS: Array<{ label: string } & Wait> = [
   { label: "No wait", delayDays: 0, delayHours: 0 },
   { label: "1 hour", delayDays: 0, delayHours: 1 },
   { label: "3 hours", delayDays: 0, delayHours: 3 },
