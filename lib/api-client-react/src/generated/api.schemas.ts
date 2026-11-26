@@ -1216,6 +1216,41 @@ export interface AiDraft {
   needsHuman?: string | null;
 }
 
+export type FreeSlotListProvider = typeof FreeSlotListProvider[keyof typeof FreeSlotListProvider];
+
+
+export const FreeSlotListProvider = {
+  none: 'none',
+  google: 'google',
+  calcom: 'calcom',
+} as const;
+
+export interface FreeSlotList {
+  provider: FreeSlotListProvider;
+  timezone: string;
+  minutes: number;
+  /** "YYYY-MM-DD HH:MM" in timezone */
+  slots: string[];
+}
+
+export interface BookMeetingInput {
+  /**
+     * "YYYY-MM-DD HH:MM"; omit to let the AI pick
+     * @nullable
+     */
+  slot?: string | null;
+}
+
+export interface BookMeetingResult {
+  slot: string;
+  timezone: string;
+  /** @nullable */
+  link?: string | null;
+  /** @nullable */
+  subject: string | null;
+  body: string;
+}
+
 export interface CallInput {
   leadId: number;
   campaignId?: number;

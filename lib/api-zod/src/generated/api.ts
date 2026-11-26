@@ -1186,6 +1186,41 @@ export const DraftAiReplyResponse = zod.object({
 
 
 /**
+ * @summary Free meeting times on the connected calendar (Cal.com or Google)
+ */
+export const ListConversationFreeSlotsParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ListConversationFreeSlotsResponse = zod.object({
+  "provider": zod.enum(['none', 'google', 'calcom']),
+  "timezone": zod.string(),
+  "minutes": zod.int(),
+  "slots": zod.array(zod.string()).describe('"YYYY-MM-DD HH:MM" in timezone')
+})
+
+
+/**
+ * @summary Book a meeting with the lead on the connected calendar and draft the confirmation. Without a slot the AI picks one.
+ */
+export const BookConversationMeetingParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const BookConversationMeetingBody = zod.object({
+  "slot": zod.string().nullish().describe('"YYYY-MM-DD HH:MM"; omit to let the AI pick')
+})
+
+export const BookConversationMeetingResponse = zod.object({
+  "slot": zod.string(),
+  "timezone": zod.string(),
+  "link": zod.string().nullish(),
+  "subject": zod.string().nullable(),
+  "body": zod.string()
+})
+
+
+/**
  * @summary Generic inbound webhook for email/LinkedIn/SMS providers. Matches the lead by email, LinkedIn URL or phone.
  */
 export const InboundWebhookBody = zod.object({

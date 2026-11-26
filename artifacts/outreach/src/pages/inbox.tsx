@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { MeetingLinkPrompt } from "@/components/meeting-link-prompt";
+import { BookMeetingPrompt } from "@/components/book-meeting-prompt";
 import { useViewingAs } from "@/components/viewing-as";
 import { Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, ago, label, chColor, errMsg, useRefreshAll, type Ch } from "@/components/bits";
 
@@ -172,6 +173,9 @@ function Thread({ id, onBack }: { id: number; onBack: () => void }) {
           </p>
         )}
         {c.status === "needs_review" && c.campaignId && <MeetingLinkPrompt campaignId={c.campaignId} onSaved={runDraft} />}
+        {c.status === "needs_review" && (
+          <BookMeetingPrompt key={id} conversationId={id} onBooked={(r) => { setAi(null); setBody(r.body); if (r.subject) setSubject(r.subject); refresh(); }} />
+        )}
         {draft.isPending && <AiWorking text="Drafting a reply in your tone" />}
         {ai && (
           <div className="pop rounded-lg border border-primary/30 bg-accent/50 p-3 text-xs" data-testid="panel-ai-draft">

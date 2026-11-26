@@ -12,8 +12,8 @@ export function MeetingLinkPrompt({ campaignId, onSaved }: { campaignId: number;
   const update = useUpdateCampaign();
   const { toast } = useToast();
   const [link, setLink] = useState("");
-  // With Google Calendar connected the AI books meetings itself, so no link is needed.
-  if (!q.data || q.data.meetingLink || cal.data?.connected) return null;
+  // With a calendar connected (Cal.com or Google) meetings are booked directly, so no link is needed.
+  if (!q.data || q.data.meetingLink || !cal.data || cal.data.provider !== "none") return null;
 
   const valid = /^https?:\/\/\S+\.\S+/.test(link.trim());
   const save = () =>
@@ -32,7 +32,7 @@ export function MeetingLinkPrompt({ campaignId, onSaved }: { campaignId: number;
           {update.isPending ? "Saving..." : "Save & draft reply"}
         </Button>
       </div>
-      <a className="mt-2 inline-block text-amber-700 underline" href="/settings">Or connect Google Calendar in Settings so the AI books meetings itself</a>
+      <a className="mt-2 inline-block text-amber-700 underline" href="/settings">Or connect Cal.com in Settings so the AI books meetings itself</a>
     </div>
   );
 }

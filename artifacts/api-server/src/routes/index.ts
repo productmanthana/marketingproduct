@@ -15,6 +15,7 @@ import crmRouter from "./crm";
 import calendarRouter from "./calendar";
 import growthRouter from "./growth";
 import quotesRouter from "./quotes";
+import conversationMeetingsRouter from "./conversation-meetings";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(crmRouter);
 router.use(calendarRouter);
 router.use(growthRouter);
 router.use(quotesRouter);
+router.use(conversationMeetingsRouter);
 
 export default router;

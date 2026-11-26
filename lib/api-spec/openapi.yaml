@@ -480,6 +480,37 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AiDraft" }
+  /conversations/{id}/free-slots:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listConversationFreeSlots
+      tags: [conversations]
+      summary: Free meeting times on the connected calendar (Cal.com or Google)
+      responses:
+        "200":
+          description: Free slots
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FreeSlotList" }
+  /conversations/{id}/book-meeting:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: bookConversationMeeting
+      tags: [conversations]
+      summary: Book a meeting with the lead on the connected calendar and draft the confirmation. Without a slot the AI picks one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BookMeetingInput" }
+      responses:
+        "200":
+          description: Booked meeting and draft reply
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BookMeetingResult" }
   /webhooks/inbound:
     post:
       operationId: inboundWebhook
@@ -2030,6 +2061,30 @@ components:
         sentiment: { $ref: "#/components/schemas/Sentiment" }
         reasoning: { type: string }
         needsHuman: { type: ["string", "null"], description: "What you need to add or decide before sending" }
+
+    FreeSlotList:
+      type: object
+      required: [provider, timezone, minutes, slots]
+      properties:
+        provider: { type: string, enum: [none, google, calcom] }
+        timezone: { type: string }
+        minutes: { type: integer }
+        slots: { type: array, items: { type: string }, description: "\"YYYY-MM-DD HH:MM\" in timezone" }
+
+    BookMeetingInput:
+      type: object
+      properties:
+        slot: { type: ["string", "null"], description: "\"YYYY-MM-DD HH:MM\"; omit to let the AI pick" }
+
+    BookMeetingResult:
+      type: object
+      required: [slot, timezone, subject, body]
+      properties:
+        slot: { type: string }
+        timezone: { type: string }
+        link: { type: ["string", "null"] }
+        subject: { type: ["string", "null"] }
+        body: { type: string }
 
     Call:
       type: object
