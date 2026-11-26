@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { MeetingLinkPrompt } from "@/components/meeting-link-prompt";
 import { Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, ago, label, chColor, errMsg, useRefreshAll, type Ch } from "@/components/bits";
 
 const STATUSES = ["open", "auto_replied", "needs_review", "closed"];
@@ -123,6 +124,8 @@ function Thread({ id, onBack }: { id: number; onBack: () => void }) {
   useEffect(() => { if (c?.unread) updRef.current({ id, data: { unread: false } }, { onSuccess: () => refresh() }); }, [c?.unread, id]); // eslint-disable-line
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [c?.messages.length, inbound.isPending]);
 
+  const runDraft = () => draft.mutate({ id }, { onSuccess: (d) => { setAi(d); setBody(d.body); if (d.subject) setSubject(d.subject); }, onError: () => toast({ title: "Draft failed", variant: "destructive" }) });
+
   if (q.isLoading) return <Rows n={5} h={80} />;
   if (q.isError || !c) return <ErrorBox onRetry={() => q.refetch()} />;
   const isEmail = c.channel === "email";
@@ -155,6 +158,7 @@ function Thread({ id, onBack }: { id: number; onBack: () => void }) {
             The AI held this reply for you instead of sending it (it needs something only you can give, like a meeting link or times). Press <b>Draft with AI</b>, fill in the details, then Send.
           </p>
         )}
+        {c.status === "needs_review" && c.campaignId && <MeetingLinkPrompt campaignId={c.campaignId} onSaved={runDraft} />}
         {draft.isPending && <AiWorking text="Drafting a reply in your tone" />}
         {ai && (
           <div className="pop rounded-lg border border-primary/30 bg-accent/50 p-3 text-xs" data-testid="panel-ai-draft">
@@ -168,7 +172,7 @@ function Thread({ id, onBack }: { id: number; onBack: () => void }) {
         <Textarea rows={4} placeholder={`Reply on ${c.channel}...`} value={body} onChange={(e) => setBody(e.target.value)} data-testid="input-reply-body" />
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" disabled={draft.isPending} data-testid="button-draft-ai"
-            onClick={() => draft.mutate({ id }, { onSuccess: (d) => { setAi(d); setBody(d.body); if (d.subject) setSubject(d.subject); }, onError: () => toast({ title: "Draft failed", variant: "destructive" }) })}>
+            onClick={runDraft}>
             <Sparkles className="mr-1.5 h-4 w-4 text-primary" />{draft.isPending ? "Drafting..." : "Draft with AI"}
           </Button>
           <Button className="ml-auto" disabled={!body.trim() || send.isPending} data-testid="button-send-reply"
