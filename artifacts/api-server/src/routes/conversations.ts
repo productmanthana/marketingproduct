@@ -24,7 +24,7 @@ import {
   UpdateConversationParams,
 } from "@workspace/api-zod";
 import { analyzeAndDraftReply } from "../lib/ai";
-import { schedulerFor } from "../lib/scheduling";
+import { calendarContext, schedulerFor } from "../lib/scheduling";
 import {
   getConversationDetail,
   getOrCreateConversation,
@@ -178,7 +178,7 @@ router.post("/conversations/:id/ai-draft", async (req, res): Promise<void> => {
     channel: conv.channel,
     history,
     objections: await db.select().from(objectionsTable),
-    calendar: free && scheduler && { timezone: free.timezone, summary: free.summary, minutes: scheduler.minutes, canBook: false },
+    calendar: free && scheduler && { ...(await calendarContext(lead!, free, scheduler)), canBook: false },
   });
   res.json(
     DraftAiReplyResponse.parse({

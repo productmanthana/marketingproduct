@@ -119,7 +119,7 @@ export async function syncAllMailboxes(): Promise<{ mailboxes: number; newReplie
   return { mailboxes: boxes.length, newReplies, errors };
 }
 
-/** Background reply detection: checks every mailbox with IMAP settings right after start, then every minute. */
+/** Background reply detection: checks every mailbox with IMAP settings right after start, then every 30 seconds. */
 export function startInboxSync(): void {
   let running = false;
   const tick = async () => {
@@ -135,5 +135,5 @@ export function startInboxSync(): void {
     }
   };
   setTimeout(tick, 10_000);
-  setInterval(tick, 60_000);
+  setInterval(tick, 30_000);
 }

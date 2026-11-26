@@ -1,5 +1,5 @@
 import type { SettingsRow } from "@workspace/db";
-import type { FreeSlots } from "./calendar";
+import { summarizeTimes, type FreeSlots } from "./calendar";
 
 /**
  * Cal.com scheduling through its v2 API with a personal API key (cal.com -> Settings -> Developer -> API Keys).
@@ -53,8 +53,8 @@ export async function calcomFreeSlots(s: SettingsRow, days = 7): Promise<FreeSlo
       byDay.set(label, [...(byDay.get(label) ?? []), time]);
     }
   }
-  // Keep the prompt short: at most 8 times per day.
-  const summary = [...byDay].map(([d, times]) => `${d}: ${times.slice(0, 8).join(", ")}`).join("\n");
+  // Ranges keep the prompt short while still covering the whole day.
+  const summary = [...byDay].map(([d, times]) => `${d}: ${summarizeTimes(times)}`).join("\n");
   return { timezone: tz, slots, summary };
 }
 
@@ -71,6 +71,21 @@ export async function calcomBook(
       attendee: { name: args.attendeeName, email: args.attendeeEmail, timeZone: args.attendeeTimezone || s.timezone || "UTC" },
     }),
   });
+  return bookingResult(data);
+}
+
+/** Moves an existing Cal.com booking to a new start; Cal.com emails the updated invite. */
+export async function calcomReschedule(s: SettingsRow, uid: string, start: Date): Promise<{ uid: string | null; meetLink: string | null }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = await cal<any>(s.calcomApiKey, `/bookings/${encodeURIComponent(uid)}/reschedule`, "2024-08-13", {
+    method: "POST",
+    body: JSON.stringify({ start: start.toISOString(), reschedulingReason: "Requested by the prospect" }),
+  });
+  return bookingResult(data);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function bookingResult(data: any): { uid: string | null; meetLink: string | null } {
   const booking = Array.isArray(data) ? data[0] : data;
   const link = booking?.meetingUrl ?? (typeof booking?.location === "string" && /^https?:/.test(booking.location) ? booking.location : null);
   return { uid: booking?.uid ?? null, meetLink: link };

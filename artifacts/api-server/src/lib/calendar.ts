@@ -115,6 +115,20 @@ export type FreeSlots = {
   summary: string;
 };
 
+/** Compact listing of free start times for the AI prompt: runs of times at most 30 minutes apart become "09:00-12:30". */
+export function summarizeTimes(times: string[]): string {
+  const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const ranges: string[] = [];
+  let first = times[0];
+  for (let i = 1; i <= times.length; i++) {
+    if (i < times.length && mins(times[i]!) - mins(times[i - 1]!) <= 30) continue;
+    const last = times[i - 1]!;
+    ranges.push(first === last ? first! : `${first}-${last}`);
+    first = times[i];
+  }
+  return `start times ${ranges.join(", ")}`;
+}
+
 /** Free meeting start times on the next weekdays, inside meeting hours, that don't clash with busy calendar events. */
 export async function findFreeSlots(s: SettingsRow, days = 7): Promise<FreeSlots> {
   const tz = s.timezone || "UTC";
@@ -156,7 +170,7 @@ export async function findFreeSlots(s: SettingsRow, days = 7): Promise<FreeSlots
   return {
     timezone: tz,
     slots: new Map(free.map((c) => [c.key, c.start])),
-    summary: [...byDay].map(([day, times]) => `${day}: ${times.join(", ")}`).join("\n"),
+    summary: [...byDay].map(([day, times]) => `${day}: ${summarizeTimes(times)}`).join("\n"),
   };
 }
 

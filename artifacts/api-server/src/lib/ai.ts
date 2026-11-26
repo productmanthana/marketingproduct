@@ -157,7 +157,17 @@ export type ReplyAnalysis = {
 };
 
 /** Free slots on the connected Google Calendar; canBook=false means offer times but never confirm a booking. */
-export type CalendarContext = { timezone: string; summary: string; minutes: number; canBook: boolean; inviteNote?: string };
+export type CalendarContext = {
+  timezone: string;
+  summary: string;
+  minutes: number;
+  canBook: boolean;
+  inviteNote?: string;
+  /** The prospect's own time zone when known. */
+  leadTimezone?: string | null;
+  /** Their already-booked meeting, e.g. "2026-11-27 03:30 (UTC)". */
+  existingMeeting?: string | null;
+};
 
 function calendarRules(c: CalendarContext | null | undefined): string {
   if (!c) return "";
@@ -165,7 +175,13 @@ function calendarRules(c: CalendarContext | null | undefined): string {
   const booking = c.canBook
     ? `If the prospect named a day/time that matches a free slot, or said any time works, set bookSlot to that slot as "YYYY-MM-DD HH:MM" (for "any time" pick the earliest slot) and set leadStatus to meeting_booked; the body confirms the exact day, date and time with the time zone and says ${c.inviteNote ?? "a calendar invite with the meeting link is on its way"}. `
     : `Never confirm a booking; set bookSlot null. `;
-  return ` A calendar is connected, so you can schedule ${c.minutes}-minute meetings yourself and do NOT need a booking link. Now it is ${now} (${c.timezone}). Free slots (${c.timezone}):\n${c.summary || "none in the next week"}\n${booking}If they want to meet but gave no time, or their time is not free, offer 2-3 specific free slots (with time zone) and set bookSlot null. Only use the listed slots. Do not set needsHuman just because there is no booking link.`;
+  const theirZone = c.leadTimezone && c.leadTimezone !== c.timezone
+    ? `The prospect's time zone is ${c.leadTimezone}: convert times they write from ${c.leadTimezone} to ${c.timezone} before matching slots, and in the reply give times in ${c.leadTimezone}. `
+    : `Assume times the prospect writes are in ${c.timezone} and state the time zone in the reply. `;
+  const existing = c.existingMeeting
+    ? `They already have a meeting booked for ${c.existingMeeting}. If they ask to reschedule or move it, handle the new time exactly like a booking request (bookSlot = the new free slot); the old booking is moved automatically, so say it has been rescheduled. `
+    : "";
+  return ` A calendar is connected, so you can schedule ${c.minutes}-minute meetings yourself and do NOT need a booking link. Now it is ${now} (${c.timezone}). Free slots (${c.timezone}; every listed range is bookable at any quarter hour inside it):\n${c.summary || "none in the next week"}\n${theirZone}${existing}${booking}If they asked for a time range (e.g. "between 2 and 3 pm"), book the earliest free start inside it. If they want to meet but gave no time, or their day/time is not free (weekends are not available), say so briefly and offer 2-3 specific free slots close to what they asked (same time of day on the nearest days, with time zone), and set bookSlot null. Only use the listed slots. Meetings are ${c.minutes} minutes; if they ask for a different length, still book at their time and mention the length in one short line. Never set needsHuman because of time zones, meeting length, rescheduling, an unavailable day, or a missing booking link: you can handle all of these yourself.`;
 }
 
 /** Bracketed fill-ins like "[meeting link]" or "[your product]" that must never reach a prospect. */

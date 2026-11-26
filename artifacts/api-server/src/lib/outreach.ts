@@ -24,8 +24,7 @@ import { analyzeAndDraftReply, personalizeMessage } from "./ai";
 import { hasEmailCapacity, linkedinQuotaLeft, sendEmail, sendLinkedIn, unipileConfigured } from "./delivery";
 import { logger } from "./logger";
 import { ensureDealForBookedLead } from "./crm";
-import { schedulerFor } from "./scheduling";
-import { recordMeeting } from "./meetings";
+import { bookOrReschedule, calendarContext, schedulerFor } from "./scheduling";
 import { suppressLead, suppressionFor } from "./suppression";
 import { verifyLead } from "./email-check";
 import { contentFor, maybePickWinner, variantFor } from "./ab-test";
@@ -452,7 +451,7 @@ export async function processInbound(
     channel: conv.channel,
     history,
     objections,
-    calendar: free && scheduler && { timezone: free.timezone, summary: free.summary, minutes: scheduler.minutes, canBook: true, inviteNote: scheduler.inviteNote },
+    calendar: free && scheduler && { ...(await calendarContext(lead, free, scheduler)), canBook: true },
   });
 
   const autoEnabled = settings.globalAutoReply && (campaign?.autoReply ?? false);
@@ -472,11 +471,10 @@ export async function processInbound(
     else {
       try {
         const title = `${settings.companyName} <> ${lead.company || leadName(lead)}`;
-        const event = await scheduler.book({ lead, start, title, description: campaign?.goal ? `Intro call: ${campaign.goal}` : "Intro call" });
-        await recordMeeting({ lead, startsAt: start, minutes: scheduler.minutes, title, link: event.link, provider: scheduler.provider, externalId: event.externalId });
+        const event = await bookOrReschedule(scheduler, { lead, start, title, description: campaign?.goal ? `Intro call: ${campaign.goal}` : "Intro call" });
         await logActivity({
           type: "meeting_booked",
-          description: `Booked ${analysis.bookSlot} (${free!.timezone}) with ${leadName(lead)}${event.link ? ` on ${event.link}` : ""}`,
+          description: `${event.rescheduled ? "Rescheduled to" : "Booked"} ${analysis.bookSlot} (${free!.timezone}) with ${leadName(lead)}${event.link ? ` on ${event.link}` : ""}`,
           channel: conv.channel,
           leadId: lead.id,
         });

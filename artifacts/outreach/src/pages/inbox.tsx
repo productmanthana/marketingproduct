@@ -28,7 +28,7 @@ export default function Inbox() {
   const [sel, setSel] = useState<number | null>(initial);
   const ownerId = useViewingAs();
   const params = { channel: (channel || undefined) as Channel | undefined, status: (status || undefined) as ConversationStatus | undefined, ownerId };
-  const q = useListConversations(params, { query: { queryKey: getListConversationsQueryKey(params), refetchInterval: 20_000 } });
+  const q = useListConversations(params, { query: { queryKey: getListConversationsQueryKey(params), refetchInterval: 10_000 } });
   const list = sort ? q.data?.filter((c) => c.sentiment && SORT_MATCH[sort]!.includes(c.sentiment)) : q.data;
   const sync = useSyncMailboxes();
   const refresh = useRefreshAll();
@@ -119,7 +119,7 @@ function Delivery({ m }: { m: Message }) {
 }
 
 function Thread({ id, onBack }: { id: number; onBack: () => void }) {
-  const q = useGetConversation(id, { query: { enabled: !!id, queryKey: getGetConversationQueryKey(id), refetchInterval: 20_000 } });
+  const q = useGetConversation(id, { query: { enabled: !!id, queryKey: getGetConversationQueryKey(id), refetchInterval: 10_000 } });
   const upd = useUpdateConversation();
   const send = useSendMessage();
   const inbound = useReceiveInbound();

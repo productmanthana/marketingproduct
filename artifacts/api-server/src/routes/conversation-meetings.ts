@@ -9,8 +9,7 @@ import {
   ListConversationFreeSlotsResponse,
 } from "@workspace/api-zod";
 import { analyzeAndDraftReply } from "../lib/ai";
-import { schedulerFor } from "../lib/scheduling";
-import { recordMeeting } from "../lib/meetings";
+import { bookOrReschedule, calendarContext, schedulerFor } from "../lib/scheduling";
 import { getSettings, leadName, logActivity } from "../lib/outreach";
 
 /** Book a meeting with a lead straight from the Inbox, on the connected calendar (Cal.com or Google). */
@@ -82,7 +81,7 @@ router.post("/conversations/:id/book-meeting", async (req, res): Promise<void> =
         channel: conv.channel,
         history,
         objections: await db.select().from(objectionsTable),
-        calendar: { timezone: free.timezone, summary: free.summary, minutes: scheduler.minutes, canBook: true, inviteNote: scheduler.inviteNote },
+        calendar: { ...(await calendarContext(lead!, free, scheduler)), canBook: true },
       }).catch(() => null);
       slot = analysis?.bookSlot && free.slots.has(analysis.bookSlot) ? analysis.bookSlot : ([...free.slots.keys()][0] ?? null);
     }
@@ -93,12 +92,11 @@ router.post("/conversations/:id/book-meeting", async (req, res): Promise<void> =
     }
 
     const title = `${settings.companyName} <> ${lead!.company || leadName(lead!)}`;
-    const event = await scheduler.book({ lead: lead!, start, title, description: campaign?.goal ? `Intro call: ${campaign.goal}` : "Intro call" });
-    await recordMeeting({ lead: lead!, startsAt: start, minutes: scheduler.minutes, title, link: event.link, provider: scheduler.provider, externalId: event.externalId });
+    const event = await bookOrReschedule(scheduler, { lead: lead!, start, title, description: campaign?.goal ? `Intro call: ${campaign.goal}` : "Intro call" });
     await db.update(leadsTable).set({ status: "meeting_booked" }).where(eq(leadsTable.id, lead!.id));
     await logActivity({
       type: "meeting_booked",
-      description: `Booked ${slot} (${free.timezone}) with ${leadName(lead!)}${event.link ? ` on ${event.link}` : ""}`,
+      description: `${event.rescheduled ? "Rescheduled to" : "Booked"} ${slot} (${free.timezone}) with ${leadName(lead!)}${event.link ? ` on ${event.link}` : ""}`,
       channel: conv.channel,
       leadId: lead!.id,
     });
@@ -106,7 +104,7 @@ router.post("/conversations/:id/book-meeting", async (req, res): Promise<void> =
     const reply = [
       `Hi ${lead!.firstName},`,
       "",
-      `I've booked us for ${slotLabel(slot)} (${free.timezone}), ${scheduler.minutes} minutes.`,
+      `${event.rescheduled ? "I've moved our meeting to" : "I've booked us for"} ${slotLabel(slot)} (${free.timezone}), ${scheduler.minutes} minutes.`,
       event.link ? `Meeting link: ${event.link}` : null,
       "A calendar invite is on its way to your inbox.",
       "",
