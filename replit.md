@@ -30,7 +30,10 @@ Multichannel sales outreach automation: campaigns sequence cold emails, LinkedIn
 - Auto-reply loop: inbound message → AI classifies sentiment + lead status → if global and campaign auto-reply are on (and the reply is not negative/objection while "escalate negative" is on) the AI reply is sent, otherwise the conversation is flagged `needs_review`.
 - Any inbound reply stops the automated sequence for that lead (`nextStepAt = null`).
 - An in-process scheduler runs due sequence steps for all `active` campaigns every 60 seconds.
-- Real delivery providers (Gmail/Outlook, LinkedIn, telephony) are NOT connected yet: outbound messages are recorded in-app. Inbound replies arrive via `POST /api/webhooks/inbound` or the "simulate reply" action in the inbox.
+- Real delivery: email via user-added SMTP mailboxes (IMAP reply sync, daily limits/warm-up, open tracking, unsubscribe), LinkedIn via Unipile, AI voice calls via Vapi — all configured in Settings. With nothing configured, outbound messages are kept in-app only. Inbound replies also arrive via `POST /api/webhooks/inbound` or "simulate reply".
+- Apollo (user's own key, secret `Apollo_api_key`, billed by Apollo): Find leads page (people search + reveal/import) needs a paid Apollo plan; company details (industry, size, location, LinkedIn) via organization enrich work on the free plan and run automatically for new leads with a website or work email.
+- Mailbox SMTP/IMAP passwords are stored unencrypted in the DB (known; revisit before production).
+- The GitHub repo (productmanthana/marketingproduct) is the code exchange point; the workspace itself is not a git repo, so PRs are applied by copying changed files in.
 - Message tables are named `outreach_conversations` / `outreach_messages` to avoid clashing with the AI integration's template tables.
 
 ## Product

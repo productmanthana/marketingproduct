@@ -155,3 +155,7 @@ export function useRefreshAll() {
 }
 
 export const TONE_OPTIONS = ["friendly", "professional", "direct", "consultative", "playful"];
+
+/** The server's error message from a failed API call. */
+export const errMsg = (e: unknown, fallback = "Something went wrong") =>
+  (e as { data?: { error?: string } } | null)?.data?.error ?? (e instanceof Error ? e.message : fallback);

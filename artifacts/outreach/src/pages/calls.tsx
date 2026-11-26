@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useSearch } from "wouter";
-import { Phone, PhoneCall, Plus, Sparkles, FileText } from "lucide-react";
+import { Bot, Phone, PhoneCall, Plus, Sparkles, FileText } from "lucide-react";
 import {
-  useListCalls, useGetCall, getGetCallQueryKey, useUpdateCall, useGenerateCallScript, useSummarizeCall, useCreateCall, useListLeads,
+  useListCalls, useGetCall, getGetCallQueryKey, useUpdateCall, useGenerateCallScript, useSummarizeCall, useCreateCall, useListLeads, useStartAiCall, useGetSettings,
 } from "@workspace/api-client-react";
 import type { CallStatus } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Rows, ErrorBox, Empty, Pill, AiWorking, Initials, Panel, ago, label, useRefreshAll } from "@/components/bits";
+import { Rows, ErrorBox, Empty, Pill, AiWorking, Initials, Panel, ago, label, errMsg, useRefreshAll } from "@/components/bits";
 
-const TABS = ["scheduled", "completed", "no_answer"];
+const TABS = ["scheduled", "in_progress", "completed", "no_answer"];
 
 export default function Calls() {
   const initial = Number(new URLSearchParams(useSearch()).get("id")) || null;
@@ -54,7 +54,10 @@ export default function Calls() {
 }
 
 function CallDetail({ id }: { id: number }) {
-  const q = useGetCall(id, { query: { enabled: !!id, queryKey: getGetCallQueryKey(id) } });
+  // While the AI agent is on the line, poll so the transcript and summary appear when the call ends.
+  const q = useGetCall(id, { query: { enabled: !!id, queryKey: getGetCallQueryKey(id), refetchInterval: (query) => (query.state.data?.status === "in_progress" ? 5000 : false) } });
+  const dial = useStartAiCall();
+  const settings = useGetSettings();
   const upd = useUpdateCall();
   const script = useGenerateCallScript();
   const sum = useSummarizeCall();
@@ -78,6 +81,13 @@ function CallDetail({ id }: { id: number }) {
           <Link href={`/leads/${c.leadId}`} className="font-display text-2xl font-bold hover:text-primary" data-testid="link-call-lead">{c.leadName}</Link>
           <div className="text-sm text-muted-foreground">{c.leadCompany} · {c.objective}</div>
         </div>
+        {c.status === "scheduled" && (
+          <Button variant="secondary" disabled={dial.isPending || !c.leadPhone} data-testid="button-ai-dial"
+            title={settings.data?.voiceConnected ? "The AI voice agent places this call" : "Connect an AI voice agent in Settings"}
+            onClick={() => dial.mutate({ id }, { onSuccess: () => { refresh(); toast({ title: "AI agent is calling", description: "The transcript and summary appear here when the call ends." }); }, onError: (e) => toast({ title: "Could not start AI call", description: errMsg(e), variant: "destructive" }) })}>
+            <Bot className="mr-1.5 h-4 w-4" />{dial.isPending ? "Dialing..." : "Call with AI agent"}
+          </Button>
+        )}
         {c.leadPhone ? (
           <a href={`tel:${c.leadPhone}`} className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 font-mono text-sm font-medium text-white" style={{ background: "hsl(var(--ch-call))" }} data-testid="link-tel"><Phone className="h-4 w-4" />{c.leadPhone}</a>
         ) : <span className="text-xs text-muted-foreground">No phone on file</span>}
@@ -92,6 +102,16 @@ function CallDetail({ id }: { id: number }) {
             <Empty icon={FileText} title="No script yet" body="Generate one from the lead profile and campaign pitch." />}
         </div>
       </Panel>
+
+      {c.status === "in_progress" && <AiWorking text="AI agent is on the call. Waiting for the end-of-call report" />}
+      {(c.transcript || c.recordingUrl) && (
+        <Panel title={`AI call${c.durationSeconds ? ` · ${Math.round(c.durationSeconds / 60)} min` : ""}`} delay={40}>
+          <div className="space-y-3 p-4">
+            {c.recordingUrl && <audio controls src={c.recordingUrl} className="w-full" data-testid="audio-recording" />}
+            {c.transcript && <p className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted/50 p-3 font-mono text-xs leading-relaxed" data-testid="text-transcript">{c.transcript}</p>}
+          </div>
+        </Panel>
+      )}
 
       <Panel title="Log the call" delay={60}>
         <div className="grid gap-3 p-4">

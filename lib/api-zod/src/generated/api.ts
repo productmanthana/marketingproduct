@@ -37,6 +37,12 @@ export const ListLeadsResponseItem = zod.object({
   "campaignName": zod.string().nullish(),
   "currentStep": zod.int().optional(),
   "notes": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
+  "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -55,6 +61,7 @@ export const CreateLeadBody = zod.object({
   "company": zod.string().optional(),
   "title": zod.string().optional(),
   "industry": zod.string().optional(),
+  "website": zod.string().optional(),
   "notes": zod.string().optional(),
   "campaignId": zod.int().optional()
 })
@@ -74,6 +81,12 @@ export const CreateLeadResponse = zod.object({
   "campaignName": zod.string().nullish(),
   "currentStep": zod.int().optional(),
   "notes": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
+  "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -96,6 +109,7 @@ export const ImportLeadsBody = zod.object({
   "company": zod.string().optional(),
   "title": zod.string().optional(),
   "industry": zod.string().optional(),
+  "website": zod.string().optional(),
   "notes": zod.string().optional(),
   "campaignId": zod.int().optional()
 }))
@@ -104,6 +118,110 @@ export const ImportLeadsBody = zod.object({
 export const ImportLeadsResponse = zod.object({
   "imported": zod.int(),
   "skipped": zod.int()
+})
+
+
+/**
+ * @summary AI scores leads against the ideal customer profile in settings
+ */
+export const QualifyLeadsBody = zod.object({
+  "leadIds": zod.array(zod.int()).optional().describe('Omit to score every lead without a score')
+})
+
+export const QualifyLeadsResponse = zod.object({
+  "qualified": zod.int()
+})
+
+
+/**
+ * @summary Whether the Apollo lead database is connected
+ */
+export const GetProspectStatusResponse = zod.object({
+  "configured": zod.boolean()
+})
+
+
+/**
+ * @summary Search Apollo for people by sector, title, company size and location
+ */
+
+
+
+export const SearchProspectsBody = zod.object({
+  "titles": zod.array(zod.string()).optional(),
+  "industries": zod.array(zod.string()).optional().describe('Sector / industry keywords'),
+  "locations": zod.array(zod.string()).optional(),
+  "employeeRanges": zod.array(zod.string()).optional().describe('e.g. 1,10 or 51,200'),
+  "keywords": zod.string().optional(),
+  "page": zod.int().min(1).optional()
+})
+
+export const SearchProspectsResponse = zod.object({
+  "people": zod.array(zod.object({
+  "apolloId": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "title": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "location": zod.string().nullish(),
+  "linkedinUrl": zod.string().nullish(),
+  "hasEmail": zod.boolean(),
+  "alreadyImported": zod.boolean()
+})),
+  "total": zod.int(),
+  "page": zod.int(),
+  "totalPages": zod.int()
+})
+
+
+/**
+ * @summary Reveal contact details for chosen Apollo people and add them as leads
+ */
+export const importProspectsBodyApolloIdsMax = 50;
+
+
+
+export const ImportProspectsBody = zod.object({
+  "apolloIds": zod.array(zod.string()).min(1).max(importProspectsBodyApolloIdsMax),
+  "campaignId": zod.int().optional()
+})
+
+export const ImportProspectsResponse = zod.object({
+  "imported": zod.int(),
+  "skipped": zod.int()
+})
+
+
+/**
+ * @summary Read the lead's company website and let AI fill industry, research notes and personalization hooks
+ */
+export const EnrichLeadParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const EnrichLeadResponse = zod.object({
+  "id": zod.int(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "linkedinUrl": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "industry": zod.string().nullish(),
+  "status": zod.enum(['new', 'contacted', 'replied', 'interested', 'meeting_booked', 'not_interested', 'unsubscribed']),
+  "campaignId": zod.int().nullish(),
+  "campaignName": zod.string().nullish(),
+  "currentStep": zod.int().optional(),
+  "notes": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
+  "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
+  "lastContactedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
 })
 
 
@@ -126,6 +244,12 @@ export const GetLeadResponse = zod.object({
   "campaignName": zod.string().nullish(),
   "currentStep": zod.int().optional(),
   "notes": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
+  "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 }).and(zod.object({
@@ -153,23 +277,36 @@ export const GetLeadResponse = zod.object({
   "leadPhone": zod.string().nullish(),
   "campaignId": zod.int().nullish(),
   "objective": zod.string().nullish(),
-  "status": zod.enum(['scheduled', 'completed', 'no_answer']),
+  "status": zod.enum(['scheduled', 'in_progress', 'completed', 'no_answer']),
   "outcome": zod.string().nullish(),
   "script": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "summary": zod.string().nullish(),
   "nextStep": zod.string().nullish(),
   "durationSeconds": zod.int().nullish(),
+  "mode": zod.enum(['manual', 'ai']).optional(),
+  "transcript": zod.string().nullish(),
+  "recordingUrl": zod.string().nullish(),
   "scheduledAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })),
   "activity": zod.array(zod.object({
   "id": zod.int(),
-  "type": zod.enum(['message_sent', 'reply_received', 'ai_reply', 'call_scheduled', 'call_completed', 'status_change', 'lead_added', 'campaign_run']),
+  "type": zod.enum(['message_sent', 'reply_received', 'ai_reply', 'call_scheduled', 'call_completed', 'status_change', 'lead_added', 'campaign_run', 'task_created', 'lead_qualified', 'lead_enriched', 'email_opened', 'unsubscribed', 'delivery_failed']),
   "description": zod.string(),
   "channel": zod.union([zod.enum(['email', 'linkedin', 'call']),zod.null()]).optional(),
   "leadId": zod.int().nullish(),
   "leadName": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "tasks": zod.array(zod.object({
+  "id": zod.int(),
+  "leadId": zod.int().nullish(),
+  "leadName": zod.string().nullish(),
+  "title": zod.string(),
+  "dueAt": zod.coerce.date().nullish(),
+  "done": zod.boolean(),
+  "source": zod.enum(['manual', 'call_summary', 'ai_reply', 'review']),
   "createdAt": zod.coerce.date()
 }))
 }))
@@ -188,6 +325,7 @@ export const UpdateLeadBody = zod.object({
   "company": zod.string().optional(),
   "title": zod.string().optional(),
   "industry": zod.string().optional(),
+  "website": zod.string().optional(),
   "notes": zod.string().optional(),
   "status": zod.enum(['new', 'contacted', 'replied', 'interested', 'meeting_booked', 'not_interested', 'unsubscribed']).optional(),
   "campaignId": zod.int().nullish()
@@ -208,6 +346,12 @@ export const UpdateLeadResponse = zod.object({
   "campaignName": zod.string().nullish(),
   "currentStep": zod.int().optional(),
   "notes": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
+  "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -320,6 +464,12 @@ export const GetCampaignResponse = zod.object({
   "campaignName": zod.string().nullish(),
   "currentStep": zod.int().optional(),
   "notes": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
+  "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 }))
@@ -423,6 +573,24 @@ export const DeleteSequenceStepResponse = zod.void()
 
 
 /**
+ * @summary Personalize a step for a real lead without sending
+ */
+export const PreviewSequenceStepParams = zod.object({
+  "id": zod.coerce.number().int(),
+  "stepId": zod.coerce.number().int()
+})
+
+export const PreviewSequenceStepBody = zod.object({
+  "leadId": zod.int()
+})
+
+export const PreviewSequenceStepResponse = zod.object({
+  "subject": zod.string().nullish(),
+  "body": zod.string()
+})
+
+
+/**
  * @summary Assign leads to this campaign
  */
 export const EnrollLeadsParams = zod.object({
@@ -502,6 +670,12 @@ export const GenerateCampaignSequenceResponse = zod.object({
   "campaignName": zod.string().nullish(),
   "currentStep": zod.int().optional(),
   "notes": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
+  "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 }))
@@ -574,6 +748,9 @@ export const GetConversationResponse = zod.object({
   "subject": zod.string().nullish(),
   "body": zod.string(),
   "author": zod.enum(['user', 'ai', 'lead']),
+  "deliveryStatus": zod.enum(['recorded', 'sent', 'failed', 'received']).optional().describe('recorded = stored in-app only (no provider connected)'),
+  "deliveryError": zod.string().nullish(),
+  "openedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })),
   "lead": zod.object({
@@ -591,6 +768,12 @@ export const GetConversationResponse = zod.object({
   "campaignName": zod.string().nullish(),
   "currentStep": zod.int().optional(),
   "notes": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
+  "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -647,6 +830,9 @@ export const SendMessageResponse = zod.object({
   "subject": zod.string().nullish(),
   "body": zod.string(),
   "author": zod.enum(['user', 'ai', 'lead']),
+  "deliveryStatus": zod.enum(['recorded', 'sent', 'failed', 'received']).optional().describe('recorded = stored in-app only (no provider connected)'),
+  "deliveryError": zod.string().nullish(),
+  "openedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -690,6 +876,9 @@ export const ReceiveInboundResponse = zod.object({
   "subject": zod.string().nullish(),
   "body": zod.string(),
   "author": zod.enum(['user', 'ai', 'lead']),
+  "deliveryStatus": zod.enum(['recorded', 'sent', 'failed', 'received']).optional().describe('recorded = stored in-app only (no provider connected)'),
+  "deliveryError": zod.string().nullish(),
+  "openedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })),
   "lead": zod.object({
@@ -707,6 +896,12 @@ export const ReceiveInboundResponse = zod.object({
   "campaignName": zod.string().nullish(),
   "currentStep": zod.int().optional(),
   "notes": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
+  "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -764,6 +959,9 @@ export const InboundWebhookResponse = zod.object({
   "subject": zod.string().nullish(),
   "body": zod.string(),
   "author": zod.enum(['user', 'ai', 'lead']),
+  "deliveryStatus": zod.enum(['recorded', 'sent', 'failed', 'received']).optional().describe('recorded = stored in-app only (no provider connected)'),
+  "deliveryError": zod.string().nullish(),
+  "openedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })),
   "lead": zod.object({
@@ -781,6 +979,12 @@ export const InboundWebhookResponse = zod.object({
   "campaignName": zod.string().nullish(),
   "currentStep": zod.int().optional(),
   "notes": zod.string().nullish(),
+  "website": zod.string().nullish(),
+  "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
+  "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -788,7 +992,7 @@ export const InboundWebhookResponse = zod.object({
 
 
 export const ListCallsQueryParams = zod.object({
-  "status": zod.enum(['scheduled', 'completed', 'no_answer']).optional()
+  "status": zod.enum(['scheduled', 'in_progress', 'completed', 'no_answer']).optional()
 })
 
 export const ListCallsResponseItem = zod.object({
@@ -799,13 +1003,16 @@ export const ListCallsResponseItem = zod.object({
   "leadPhone": zod.string().nullish(),
   "campaignId": zod.int().nullish(),
   "objective": zod.string().nullish(),
-  "status": zod.enum(['scheduled', 'completed', 'no_answer']),
+  "status": zod.enum(['scheduled', 'in_progress', 'completed', 'no_answer']),
   "outcome": zod.string().nullish(),
   "script": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "summary": zod.string().nullish(),
   "nextStep": zod.string().nullish(),
   "durationSeconds": zod.int().nullish(),
+  "mode": zod.enum(['manual', 'ai']).optional(),
+  "transcript": zod.string().nullish(),
+  "recordingUrl": zod.string().nullish(),
   "scheduledAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -827,13 +1034,16 @@ export const CreateCallResponse = zod.object({
   "leadPhone": zod.string().nullish(),
   "campaignId": zod.int().nullish(),
   "objective": zod.string().nullish(),
-  "status": zod.enum(['scheduled', 'completed', 'no_answer']),
+  "status": zod.enum(['scheduled', 'in_progress', 'completed', 'no_answer']),
   "outcome": zod.string().nullish(),
   "script": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "summary": zod.string().nullish(),
   "nextStep": zod.string().nullish(),
   "durationSeconds": zod.int().nullish(),
+  "mode": zod.enum(['manual', 'ai']).optional(),
+  "transcript": zod.string().nullish(),
+  "recordingUrl": zod.string().nullish(),
   "scheduledAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -851,13 +1061,16 @@ export const GetCallResponse = zod.object({
   "leadPhone": zod.string().nullish(),
   "campaignId": zod.int().nullish(),
   "objective": zod.string().nullish(),
-  "status": zod.enum(['scheduled', 'completed', 'no_answer']),
+  "status": zod.enum(['scheduled', 'in_progress', 'completed', 'no_answer']),
   "outcome": zod.string().nullish(),
   "script": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "summary": zod.string().nullish(),
   "nextStep": zod.string().nullish(),
   "durationSeconds": zod.int().nullish(),
+  "mode": zod.enum(['manual', 'ai']).optional(),
+  "transcript": zod.string().nullish(),
+  "recordingUrl": zod.string().nullish(),
   "scheduledAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -871,7 +1084,7 @@ export const UpdateCallParams = zod.object({
 })
 
 export const UpdateCallBody = zod.object({
-  "status": zod.enum(['scheduled', 'completed', 'no_answer']).optional(),
+  "status": zod.enum(['scheduled', 'in_progress', 'completed', 'no_answer']).optional(),
   "outcome": zod.string().optional(),
   "notes": zod.string().optional(),
   "durationSeconds": zod.int().optional(),
@@ -886,13 +1099,16 @@ export const UpdateCallResponse = zod.object({
   "leadPhone": zod.string().nullish(),
   "campaignId": zod.int().nullish(),
   "objective": zod.string().nullish(),
-  "status": zod.enum(['scheduled', 'completed', 'no_answer']),
+  "status": zod.enum(['scheduled', 'in_progress', 'completed', 'no_answer']),
   "outcome": zod.string().nullish(),
   "script": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "summary": zod.string().nullish(),
   "nextStep": zod.string().nullish(),
   "durationSeconds": zod.int().nullish(),
+  "mode": zod.enum(['manual', 'ai']).optional(),
+  "transcript": zod.string().nullish(),
+  "recordingUrl": zod.string().nullish(),
   "scheduledAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -910,13 +1126,46 @@ export const GenerateCallScriptResponse = zod.object({
   "leadPhone": zod.string().nullish(),
   "campaignId": zod.int().nullish(),
   "objective": zod.string().nullish(),
-  "status": zod.enum(['scheduled', 'completed', 'no_answer']),
+  "status": zod.enum(['scheduled', 'in_progress', 'completed', 'no_answer']),
   "outcome": zod.string().nullish(),
   "script": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "summary": zod.string().nullish(),
   "nextStep": zod.string().nullish(),
   "durationSeconds": zod.int().nullish(),
+  "mode": zod.enum(['manual', 'ai']).optional(),
+  "transcript": zod.string().nullish(),
+  "recordingUrl": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Place the call with the AI voice agent (Vapi-compatible API). The transcript arrives by webhook and is summarized automatically.
+ */
+export const StartAiCallParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const StartAiCallResponse = zod.object({
+  "id": zod.int(),
+  "leadId": zod.int(),
+  "leadName": zod.string(),
+  "leadCompany": zod.string().nullish(),
+  "leadPhone": zod.string().nullish(),
+  "campaignId": zod.int().nullish(),
+  "objective": zod.string().nullish(),
+  "status": zod.enum(['scheduled', 'in_progress', 'completed', 'no_answer']),
+  "outcome": zod.string().nullish(),
+  "script": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "summary": zod.string().nullish(),
+  "nextStep": zod.string().nullish(),
+  "durationSeconds": zod.int().nullish(),
+  "mode": zod.enum(['manual', 'ai']).optional(),
+  "transcript": zod.string().nullish(),
+  "recordingUrl": zod.string().nullish(),
   "scheduledAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -937,13 +1186,16 @@ export const SummarizeCallResponse = zod.object({
   "leadPhone": zod.string().nullish(),
   "campaignId": zod.int().nullish(),
   "objective": zod.string().nullish(),
-  "status": zod.enum(['scheduled', 'completed', 'no_answer']),
+  "status": zod.enum(['scheduled', 'in_progress', 'completed', 'no_answer']),
   "outcome": zod.string().nullish(),
   "script": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "summary": zod.string().nullish(),
   "nextStep": zod.string().nullish(),
   "durationSeconds": zod.int().nullish(),
+  "mode": zod.enum(['manual', 'ai']).optional(),
+  "transcript": zod.string().nullish(),
+  "recordingUrl": zod.string().nullish(),
   "scheduledAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -958,7 +1210,9 @@ export const GetDashboardSummaryResponse = zod.object({
   "aiRepliesSent": zod.int(),
   "meetingsBooked": zod.int(),
   "callsScheduled": zod.int(),
-  "needsReview": zod.int()
+  "needsReview": zod.int(),
+  "emailsOpened": zod.int().optional(),
+  "openTasks": zod.int().optional()
 })
 
 
@@ -984,7 +1238,7 @@ export const GetRecentActivityQueryParams = zod.object({
 
 export const GetRecentActivityResponseItem = zod.object({
   "id": zod.int(),
-  "type": zod.enum(['message_sent', 'reply_received', 'ai_reply', 'call_scheduled', 'call_completed', 'status_change', 'lead_added', 'campaign_run']),
+  "type": zod.enum(['message_sent', 'reply_received', 'ai_reply', 'call_scheduled', 'call_completed', 'status_change', 'lead_added', 'campaign_run', 'task_created', 'lead_qualified', 'lead_enriched', 'email_opened', 'unsubscribed', 'delivery_failed']),
   "description": zod.string(),
   "channel": zod.union([zod.enum(['email', 'linkedin', 'call']),zod.null()]).optional(),
   "leadId": zod.int().nullish(),
@@ -994,14 +1248,272 @@ export const GetRecentActivityResponseItem = zod.object({
 export const GetRecentActivityResponse = zod.array(GetRecentActivityResponseItem)
 
 
+export const ListMailboxesResponseItem = zod.object({
+  "id": zod.int(),
+  "label": zod.string(),
+  "fromName": zod.string(),
+  "fromEmail": zod.string(),
+  "smtpHost": zod.string(),
+  "smtpPort": zod.int(),
+  "smtpSecure": zod.boolean(),
+  "smtpUser": zod.string(),
+  "imapHost": zod.string().nullish(),
+  "imapPort": zod.int(),
+  "imapSecure": zod.boolean(),
+  "imapUser": zod.string().nullish(),
+  "dailyLimit": zod.int(),
+  "warmupEnabled": zod.boolean(),
+  "warmupStart": zod.int(),
+  "warmupIncrement": zod.int(),
+  "sentToday": zod.int(),
+  "todayLimit": zod.int().describe('Sending limit for today after warm-up ramp'),
+  "active": zod.boolean(),
+  "lastSyncAt": zod.coerce.date().nullish(),
+  "lastError": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListMailboxesResponse = zod.array(ListMailboxesResponseItem)
+
+
+
+
+
+export const CreateMailboxBody = zod.object({
+  "label": zod.string().min(1),
+  "fromName": zod.string(),
+  "fromEmail": zod.string(),
+  "smtpHost": zod.string(),
+  "smtpPort": zod.int().optional(),
+  "smtpSecure": zod.boolean().optional(),
+  "smtpUser": zod.string(),
+  "smtpPass": zod.string(),
+  "imapHost": zod.string().optional(),
+  "imapPort": zod.int().optional(),
+  "imapSecure": zod.boolean().optional(),
+  "imapUser": zod.string().optional(),
+  "imapPass": zod.string().optional(),
+  "dailyLimit": zod.int().optional(),
+  "warmupEnabled": zod.boolean().optional(),
+  "warmupStart": zod.int().optional(),
+  "warmupIncrement": zod.int().optional()
+})
+
+export const CreateMailboxResponse = zod.object({
+  "id": zod.int(),
+  "label": zod.string(),
+  "fromName": zod.string(),
+  "fromEmail": zod.string(),
+  "smtpHost": zod.string(),
+  "smtpPort": zod.int(),
+  "smtpSecure": zod.boolean(),
+  "smtpUser": zod.string(),
+  "imapHost": zod.string().nullish(),
+  "imapPort": zod.int(),
+  "imapSecure": zod.boolean(),
+  "imapUser": zod.string().nullish(),
+  "dailyLimit": zod.int(),
+  "warmupEnabled": zod.boolean(),
+  "warmupStart": zod.int(),
+  "warmupIncrement": zod.int(),
+  "sentToday": zod.int(),
+  "todayLimit": zod.int().describe('Sending limit for today after warm-up ramp'),
+  "active": zod.boolean(),
+  "lastSyncAt": zod.coerce.date().nullish(),
+  "lastError": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Check every mailbox for new replies now
+ */
+export const SyncMailboxesResponse = zod.object({
+  "mailboxes": zod.int(),
+  "newReplies": zod.int(),
+  "errors": zod.array(zod.string())
+})
+
+
+export const UpdateMailboxParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UpdateMailboxBody = zod.object({
+  "label": zod.string().optional(),
+  "fromName": zod.string().optional(),
+  "fromEmail": zod.string().optional(),
+  "smtpHost": zod.string().optional(),
+  "smtpPort": zod.int().optional(),
+  "smtpSecure": zod.boolean().optional(),
+  "smtpUser": zod.string().optional(),
+  "smtpPass": zod.string().optional(),
+  "imapHost": zod.string().optional(),
+  "imapPort": zod.int().optional(),
+  "imapSecure": zod.boolean().optional(),
+  "imapUser": zod.string().optional(),
+  "imapPass": zod.string().optional(),
+  "dailyLimit": zod.int().optional(),
+  "warmupEnabled": zod.boolean().optional(),
+  "warmupStart": zod.int().optional(),
+  "warmupIncrement": zod.int().optional(),
+  "active": zod.boolean().optional()
+})
+
+export const UpdateMailboxResponse = zod.object({
+  "id": zod.int(),
+  "label": zod.string(),
+  "fromName": zod.string(),
+  "fromEmail": zod.string(),
+  "smtpHost": zod.string(),
+  "smtpPort": zod.int(),
+  "smtpSecure": zod.boolean(),
+  "smtpUser": zod.string(),
+  "imapHost": zod.string().nullish(),
+  "imapPort": zod.int(),
+  "imapSecure": zod.boolean(),
+  "imapUser": zod.string().nullish(),
+  "dailyLimit": zod.int(),
+  "warmupEnabled": zod.boolean(),
+  "warmupStart": zod.int(),
+  "warmupIncrement": zod.int(),
+  "sentToday": zod.int(),
+  "todayLimit": zod.int().describe('Sending limit for today after warm-up ramp'),
+  "active": zod.boolean(),
+  "lastSyncAt": zod.coerce.date().nullish(),
+  "lastError": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const DeleteMailboxParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteMailboxResponse = zod.void()
+
+
+/**
+ * @summary Verify SMTP (and IMAP when configured) credentials
+ */
+export const TestMailboxParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const TestMailboxResponse = zod.object({
+  "ok": zod.boolean(),
+  "message": zod.string()
+})
+
+
+export const TestIntegrationBody = zod.object({
+  "provider": zod.enum(['linkedin', 'voice'])
+})
+
+export const TestIntegrationResponse = zod.object({
+  "ok": zod.boolean(),
+  "message": zod.string()
+})
+
+
+export const ListTasksQueryParams = zod.object({
+  "done": zod.coerce.boolean().optional(),
+  "leadId": zod.coerce.number().int().optional()
+})
+
+export const ListTasksResponseItem = zod.object({
+  "id": zod.int(),
+  "leadId": zod.int().nullish(),
+  "leadName": zod.string().nullish(),
+  "title": zod.string(),
+  "dueAt": zod.coerce.date().nullish(),
+  "done": zod.boolean(),
+  "source": zod.enum(['manual', 'call_summary', 'ai_reply', 'review']),
+  "createdAt": zod.coerce.date()
+})
+export const ListTasksResponse = zod.array(ListTasksResponseItem)
+
+
+
+
+
+export const CreateTaskBody = zod.object({
+  "title": zod.string().min(1),
+  "leadId": zod.int().optional(),
+  "dueAt": zod.coerce.date().optional()
+})
+
+export const CreateTaskResponse = zod.object({
+  "id": zod.int(),
+  "leadId": zod.int().nullish(),
+  "leadName": zod.string().nullish(),
+  "title": zod.string(),
+  "dueAt": zod.coerce.date().nullish(),
+  "done": zod.boolean(),
+  "source": zod.enum(['manual', 'call_summary', 'ai_reply', 'review']),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const UpdateTaskParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UpdateTaskBody = zod.object({
+  "title": zod.string().optional(),
+  "dueAt": zod.coerce.date().nullish(),
+  "done": zod.boolean().optional()
+})
+
+export const UpdateTaskResponse = zod.object({
+  "id": zod.int(),
+  "leadId": zod.int().nullish(),
+  "leadName": zod.string().nullish(),
+  "title": zod.string(),
+  "dueAt": zod.coerce.date().nullish(),
+  "done": zod.boolean(),
+  "source": zod.enum(['manual', 'call_summary', 'ai_reply', 'review']),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const DeleteTaskParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteTaskResponse = zod.void()
+
+
 export const GetSettingsResponse = zod.object({
   "senderName": zod.string(),
   "companyName": zod.string(),
   "signature": zod.string(),
   "defaultTone": zod.string(),
   "globalAutoReply": zod.boolean().describe('Master switch; when off no campaign auto-replies'),
-  "escalateNegative": zod.boolean().optional().describe('Route objections/negative replies to human review instead of auto replying')
+  "escalateNegative": zod.boolean().optional().describe('Route objections/negative replies to human review instead of auto replying'),
+  "icpDescription": zod.string().optional(),
+  "publicBaseUrl": zod.string().optional().describe('Public URL of this app, used for open tracking, unsubscribe links and webhooks'),
+  "trackOpens": zod.boolean().optional(),
+  "unsubscribeFooter": zod.boolean().optional(),
+  "sendWindowStart": zod.int().optional(),
+  "sendWindowEnd": zod.int().optional(),
+  "sendWeekdaysOnly": zod.boolean().optional(),
+  "timezone": zod.string().optional(),
+  "unipileDsn": zod.string().optional(),
+  "unipileAccountId": zod.string().optional(),
+  "unipileConnected": zod.boolean().optional(),
+  "linkedinDailyLimit": zod.int().optional(),
+  "voiceApiBaseUrl": zod.string().optional(),
+  "voicePhoneNumberId": zod.string().optional(),
+  "voiceName": zod.string().optional(),
+  "voiceConnected": zod.boolean().optional()
 })
+
+
+export const updateSettingsBodySendWindowStartMin = 0;
+export const updateSettingsBodySendWindowStartMax = 23;
+
+export const updateSettingsBodySendWindowEndMax = 24;
+
 
 
 export const UpdateSettingsBody = zod.object({
@@ -1010,7 +1522,23 @@ export const UpdateSettingsBody = zod.object({
   "signature": zod.string().optional(),
   "defaultTone": zod.string().optional(),
   "globalAutoReply": zod.boolean().optional(),
-  "escalateNegative": zod.boolean().optional()
+  "escalateNegative": zod.boolean().optional(),
+  "icpDescription": zod.string().optional(),
+  "publicBaseUrl": zod.string().optional(),
+  "trackOpens": zod.boolean().optional(),
+  "unsubscribeFooter": zod.boolean().optional(),
+  "sendWindowStart": zod.int().min(updateSettingsBodySendWindowStartMin).max(updateSettingsBodySendWindowStartMax).optional(),
+  "sendWindowEnd": zod.int().min(1).max(updateSettingsBodySendWindowEndMax).optional(),
+  "sendWeekdaysOnly": zod.boolean().optional(),
+  "timezone": zod.string().optional(),
+  "unipileDsn": zod.string().optional(),
+  "unipileApiKey": zod.string().optional().describe('Write-only; empty keeps the stored key'),
+  "unipileAccountId": zod.string().optional(),
+  "linkedinDailyLimit": zod.int().optional(),
+  "voiceApiBaseUrl": zod.string().optional(),
+  "voiceApiKey": zod.string().optional().describe('Write-only; empty keeps the stored key'),
+  "voicePhoneNumberId": zod.string().optional(),
+  "voiceName": zod.string().optional()
 })
 
 export const UpdateSettingsResponse = zod.object({
@@ -1019,7 +1547,23 @@ export const UpdateSettingsResponse = zod.object({
   "signature": zod.string(),
   "defaultTone": zod.string(),
   "globalAutoReply": zod.boolean().describe('Master switch; when off no campaign auto-replies'),
-  "escalateNegative": zod.boolean().optional().describe('Route objections/negative replies to human review instead of auto replying')
+  "escalateNegative": zod.boolean().optional().describe('Route objections/negative replies to human review instead of auto replying'),
+  "icpDescription": zod.string().optional(),
+  "publicBaseUrl": zod.string().optional().describe('Public URL of this app, used for open tracking, unsubscribe links and webhooks'),
+  "trackOpens": zod.boolean().optional(),
+  "unsubscribeFooter": zod.boolean().optional(),
+  "sendWindowStart": zod.int().optional(),
+  "sendWindowEnd": zod.int().optional(),
+  "sendWeekdaysOnly": zod.boolean().optional(),
+  "timezone": zod.string().optional(),
+  "unipileDsn": zod.string().optional(),
+  "unipileAccountId": zod.string().optional(),
+  "unipileConnected": zod.boolean().optional(),
+  "linkedinDailyLimit": zod.int().optional(),
+  "voiceApiBaseUrl": zod.string().optional(),
+  "voicePhoneNumberId": zod.string().optional(),
+  "voiceName": zod.string().optional(),
+  "voiceConnected": zod.boolean().optional()
 })
 
 

@@ -15,6 +15,8 @@ tags:
   - name: calls
   - name: dashboard
   - name: settings
+  - name: mailboxes
+  - name: tasks
 paths:
   /healthz:
     get:
@@ -73,6 +75,78 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ImportResult" }
+  /leads/qualify:
+    post:
+      operationId: qualifyLeads
+      tags: [leads]
+      summary: AI scores leads against the ideal customer profile in settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QualifyLeadsInput" }
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QualifyResult" }
+  /prospects/status:
+    get:
+      operationId: getProspectStatus
+      tags: [prospects]
+      summary: Whether the Apollo lead database is connected
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectStatus" }
+  /prospects/search:
+    post:
+      operationId: searchProspects
+      tags: [prospects]
+      summary: Search Apollo for people by sector, title, company size and location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectSearchInput" }
+      responses:
+        "200":
+          description: Matching people
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectSearchResult" }
+  /prospects/import:
+    post:
+      operationId: importProspects
+      tags: [prospects]
+      summary: Reveal contact details for chosen Apollo people and add them as leads
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectImportInput" }
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectImportResult" }
+  /leads/{id}/enrich:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: enrichLead
+      tags: [leads]
+      summary: Read the lead's company website and let AI fill industry, research notes and personalization hooks
+      responses:
+        "200":
+          description: Enriched lead
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Lead" }
   /leads/{id}:
     parameters:
       - { name: id, in: path, required: true, schema: { type: integer } }
@@ -202,6 +276,25 @@ paths:
       tags: [campaigns]
       responses:
         "204": { description: Deleted }
+  /campaigns/{id}/steps/{stepId}/preview:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+      - { name: stepId, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: previewSequenceStep
+      tags: [campaigns]
+      summary: Personalize a step for a real lead without sending
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepPreviewInput" }
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StepPreview" }
   /campaigns/{id}/leads:
     parameters:
       - { name: id, in: path, required: true, schema: { type: integer } }
@@ -420,6 +513,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Call" }
+  /calls/{id}/ai-dial:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: startAiCall
+      tags: [calls]
+      summary: Place the call with the AI voice agent (Vapi-compatible API). The transcript arrives by webhook and is summarized automatically.
+      responses:
+        "200":
+          description: Call
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Call" }
   /calls/{id}/summarize:
     parameters:
       - { name: id, in: path, required: true, schema: { type: integer } }
@@ -477,6 +583,142 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/Activity" } }
 
+  /mailboxes:
+    get:
+      operationId: listMailboxes
+      tags: [mailboxes]
+      responses:
+        "200":
+          description: Mailboxes
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Mailbox" } }
+    post:
+      operationId: createMailbox
+      tags: [mailboxes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MailboxInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Mailbox" }
+  /mailboxes/sync:
+    post:
+      operationId: syncMailboxes
+      tags: [mailboxes]
+      summary: Check every mailbox for new replies now
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyncResult" }
+  /mailboxes/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    patch:
+      operationId: updateMailbox
+      tags: [mailboxes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MailboxUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Mailbox" }
+    delete:
+      operationId: deleteMailbox
+      tags: [mailboxes]
+      responses:
+        "204": { description: Deleted }
+  /mailboxes/{id}/test:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: testMailbox
+      tags: [mailboxes]
+      summary: Verify SMTP (and IMAP when configured) credentials
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationTestResult" }
+  /integrations/test:
+    post:
+      operationId: testIntegration
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IntegrationTestInput" }
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationTestResult" }
+
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      parameters:
+        - { name: done, in: query, required: false, schema: { type: boolean } }
+        - { name: leadId, in: query, required: false, schema: { type: integer } }
+      responses:
+        "200":
+          description: Tasks
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Task" } }
+    post:
+      operationId: createTask
+      tags: [tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+  /tasks/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TaskUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+    delete:
+      operationId: deleteTask
+      tags: [tasks]
+      responses:
+        "204": { description: Deleted }
+
   /settings:
     get:
       operationId: getSettings
@@ -524,7 +766,7 @@ components:
       enum: [open, auto_replied, needs_review, closed]
     CallStatus:
       type: string
-      enum: [scheduled, completed, no_answer]
+      enum: [scheduled, in_progress, completed, no_answer]
     Sentiment:
       type: string
       enum: [positive, neutral, negative, objection, out_of_office, unsubscribe]
@@ -547,17 +789,71 @@ components:
         campaignName: { type: ["string", "null"] }
         currentStep: { type: integer }
         notes: { type: ["string", "null"] }
+        website: { type: ["string", "null"] }
+        fitScore: { type: ["integer", "null"], description: "0-100 AI fit against the ideal customer profile" }
+        fitReason: { type: ["string", "null"] }
+        companySize: { type: ["string", "null"], description: "Approximate employee count" }
+        companyLocation: { type: ["string", "null"] }
+        companyLinkedinUrl: { type: ["string", "null"] }
         lastContactedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
+    ProspectStatus:
+      type: object
+      required: [configured]
+      properties:
+        configured: { type: boolean }
+    ProspectSearchInput:
+      type: object
+      properties:
+        titles: { type: array, items: { type: string } }
+        industries: { type: array, items: { type: string }, description: "Sector / industry keywords" }
+        locations: { type: array, items: { type: string } }
+        employeeRanges: { type: array, items: { type: string }, description: "e.g. 1,10 or 51,200" }
+        keywords: { type: string }
+        page: { type: integer, minimum: 1 }
+    Prospect:
+      type: object
+      required: [apolloId, firstName, lastName, hasEmail, alreadyImported]
+      properties:
+        apolloId: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        title: { type: ["string", "null"] }
+        company: { type: ["string", "null"] }
+        location: { type: ["string", "null"] }
+        linkedinUrl: { type: ["string", "null"] }
+        hasEmail: { type: boolean }
+        alreadyImported: { type: boolean }
+    ProspectSearchResult:
+      type: object
+      required: [people, total, page, totalPages]
+      properties:
+        people: { type: array, items: { $ref: "#/components/schemas/Prospect" } }
+        total: { type: integer }
+        page: { type: integer }
+        totalPages: { type: integer }
+    ProspectImportInput:
+      type: object
+      required: [apolloIds]
+      properties:
+        apolloIds: { type: array, items: { type: string }, minItems: 1, maxItems: 50 }
+        campaignId: { type: integer }
+    ProspectImportResult:
+      type: object
+      required: [imported, skipped]
+      properties:
+        imported: { type: integer }
+        skipped: { type: integer }
     LeadDetail:
       allOf:
         - $ref: "#/components/schemas/Lead"
         - type: object
-          required: [conversations, calls, activity]
+          required: [conversations, calls, activity, tasks]
           properties:
             conversations: { type: array, items: { $ref: "#/components/schemas/Conversation" } }
             calls: { type: array, items: { $ref: "#/components/schemas/Call" } }
             activity: { type: array, items: { $ref: "#/components/schemas/Activity" } }
+            tasks: { type: array, items: { $ref: "#/components/schemas/Task" } }
     LeadInput:
       type: object
       required: [firstName, lastName]
@@ -570,6 +866,7 @@ components:
         company: { type: string }
         title: { type: string }
         industry: { type: string }
+        website: { type: string }
         notes: { type: string }
         campaignId: { type: integer }
     LeadUpdate:
@@ -583,6 +880,7 @@ components:
         company: { type: string }
         title: { type: string }
         industry: { type: string }
+        website: { type: string }
         notes: { type: string }
         status: { $ref: "#/components/schemas/LeadStatus" }
         campaignId: { type: ["integer", "null"] }
@@ -592,6 +890,26 @@ components:
       properties:
         campaignId: { type: integer }
         leads: { type: array, items: { $ref: "#/components/schemas/LeadInput" } }
+    QualifyLeadsInput:
+      type: object
+      properties:
+        leadIds: { type: array, items: { type: integer }, description: "Omit to score every lead without a score" }
+    QualifyResult:
+      type: object
+      required: [qualified]
+      properties:
+        qualified: { type: integer }
+    StepPreviewInput:
+      type: object
+      required: [leadId]
+      properties:
+        leadId: { type: integer }
+    StepPreview:
+      type: object
+      required: [body]
+      properties:
+        subject: { type: ["string", "null"] }
+        body: { type: string }
     ImportResult:
       type: object
       required: [imported, skipped]
@@ -731,6 +1049,9 @@ components:
         subject: { type: ["string", "null"] }
         body: { type: string }
         author: { type: string, enum: [user, ai, lead] }
+        deliveryStatus: { type: string, enum: [recorded, sent, failed, received], description: "recorded = stored in-app only (no provider connected)" }
+        deliveryError: { type: ["string", "null"] }
+        openedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     MessageInput:
       type: object
@@ -781,6 +1102,9 @@ components:
         summary: { type: ["string", "null"] }
         nextStep: { type: ["string", "null"] }
         durationSeconds: { type: ["integer", "null"] }
+        mode: { type: string, enum: [manual, ai] }
+        transcript: { type: ["string", "null"] }
+        recordingUrl: { type: ["string", "null"] }
         scheduledAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     CallInput:
@@ -813,6 +1137,8 @@ components:
         meetingsBooked: { type: integer }
         callsScheduled: { type: integer }
         needsReview: { type: integer }
+        emailsOpened: { type: integer }
+        openTasks: { type: integer }
     ChannelStat:
       type: object
       required: [channel, sent, replies, replyRate]
@@ -832,7 +1158,7 @@ components:
       required: [id, type, description, createdAt]
       properties:
         id: { type: integer }
-        type: { type: string, enum: [message_sent, reply_received, ai_reply, call_scheduled, call_completed, status_change, lead_added, campaign_run] }
+        type: { type: string, enum: [message_sent, reply_received, ai_reply, call_scheduled, call_completed, status_change, lead_added, campaign_run, task_created, lead_qualified, lead_enriched, email_opened, unsubscribed, delivery_failed] }
         description: { type: string }
         channel: { oneOf: [{ $ref: "#/components/schemas/Channel" }, { type: "null" }] }
         leadId: { type: ["integer", "null"] }
@@ -849,6 +1175,22 @@ components:
         defaultTone: { type: string }
         globalAutoReply: { type: boolean, description: "Master switch; when off no campaign auto-replies" }
         escalateNegative: { type: boolean, description: "Route objections/negative replies to human review instead of auto replying" }
+        icpDescription: { type: string }
+        publicBaseUrl: { type: string, description: "Public URL of this app, used for open tracking, unsubscribe links and webhooks" }
+        trackOpens: { type: boolean }
+        unsubscribeFooter: { type: boolean }
+        sendWindowStart: { type: integer }
+        sendWindowEnd: { type: integer }
+        sendWeekdaysOnly: { type: boolean }
+        timezone: { type: string }
+        unipileDsn: { type: string }
+        unipileAccountId: { type: string }
+        unipileConnected: { type: boolean }
+        linkedinDailyLimit: { type: integer }
+        voiceApiBaseUrl: { type: string }
+        voicePhoneNumberId: { type: string }
+        voiceName: { type: string }
+        voiceConnected: { type: boolean }
     SettingsInput:
       type: object
       properties:
@@ -858,3 +1200,132 @@ components:
         defaultTone: { type: string }
         globalAutoReply: { type: boolean }
         escalateNegative: { type: boolean }
+        icpDescription: { type: string }
+        publicBaseUrl: { type: string }
+        trackOpens: { type: boolean }
+        unsubscribeFooter: { type: boolean }
+        sendWindowStart: { type: integer, minimum: 0, maximum: 23 }
+        sendWindowEnd: { type: integer, minimum: 1, maximum: 24 }
+        sendWeekdaysOnly: { type: boolean }
+        timezone: { type: string }
+        unipileDsn: { type: string }
+        unipileApiKey: { type: string, description: "Write-only; empty keeps the stored key" }
+        unipileAccountId: { type: string }
+        linkedinDailyLimit: { type: integer }
+        voiceApiBaseUrl: { type: string }
+        voiceApiKey: { type: string, description: "Write-only; empty keeps the stored key" }
+        voicePhoneNumberId: { type: string }
+        voiceName: { type: string }
+
+    Mailbox:
+      type: object
+      required: [id, label, fromName, fromEmail, smtpHost, smtpPort, smtpSecure, smtpUser, imapPort, imapSecure, dailyLimit, warmupEnabled, warmupStart, warmupIncrement, sentToday, todayLimit, active, createdAt]
+      properties:
+        id: { type: integer }
+        label: { type: string }
+        fromName: { type: string }
+        fromEmail: { type: string }
+        smtpHost: { type: string }
+        smtpPort: { type: integer }
+        smtpSecure: { type: boolean }
+        smtpUser: { type: string }
+        imapHost: { type: ["string", "null"] }
+        imapPort: { type: integer }
+        imapSecure: { type: boolean }
+        imapUser: { type: ["string", "null"] }
+        dailyLimit: { type: integer }
+        warmupEnabled: { type: boolean }
+        warmupStart: { type: integer }
+        warmupIncrement: { type: integer }
+        sentToday: { type: integer }
+        todayLimit: { type: integer, description: "Sending limit for today after warm-up ramp" }
+        active: { type: boolean }
+        lastSyncAt: { type: ["string", "null"], format: date-time }
+        lastError: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    MailboxInput:
+      type: object
+      required: [label, fromName, fromEmail, smtpHost, smtpUser, smtpPass]
+      properties:
+        label: { type: string, minLength: 1 }
+        fromName: { type: string }
+        fromEmail: { type: string }
+        smtpHost: { type: string }
+        smtpPort: { type: integer }
+        smtpSecure: { type: boolean }
+        smtpUser: { type: string }
+        smtpPass: { type: string }
+        imapHost: { type: string }
+        imapPort: { type: integer }
+        imapSecure: { type: boolean }
+        imapUser: { type: string }
+        imapPass: { type: string }
+        dailyLimit: { type: integer }
+        warmupEnabled: { type: boolean }
+        warmupStart: { type: integer }
+        warmupIncrement: { type: integer }
+    MailboxUpdate:
+      type: object
+      properties:
+        label: { type: string }
+        fromName: { type: string }
+        fromEmail: { type: string }
+        smtpHost: { type: string }
+        smtpPort: { type: integer }
+        smtpSecure: { type: boolean }
+        smtpUser: { type: string }
+        smtpPass: { type: string }
+        imapHost: { type: string }
+        imapPort: { type: integer }
+        imapSecure: { type: boolean }
+        imapUser: { type: string }
+        imapPass: { type: string }
+        dailyLimit: { type: integer }
+        warmupEnabled: { type: boolean }
+        warmupStart: { type: integer }
+        warmupIncrement: { type: integer }
+        active: { type: boolean }
+    SyncResult:
+      type: object
+      required: [mailboxes, newReplies, errors]
+      properties:
+        mailboxes: { type: integer }
+        newReplies: { type: integer }
+        errors: { type: array, items: { type: string } }
+    IntegrationTestInput:
+      type: object
+      required: [provider]
+      properties:
+        provider: { type: string, enum: [linkedin, voice] }
+    IntegrationTestResult:
+      type: object
+      required: [ok, message]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+
+    Task:
+      type: object
+      required: [id, title, done, source, createdAt]
+      properties:
+        id: { type: integer }
+        leadId: { type: ["integer", "null"] }
+        leadName: { type: ["string", "null"] }
+        title: { type: string }
+        dueAt: { type: ["string", "null"], format: date-time }
+        done: { type: boolean }
+        source: { type: string, enum: [manual, call_summary, ai_reply, review] }
+        createdAt: { type: string, format: date-time }
+    TaskInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1 }
+        leadId: { type: integer }
+        dueAt: { type: string, format: date-time }
+    TaskUpdate:
+      type: object
+      properties:
+        title: { type: string }
+        dueAt: { type: ["string", "null"], format: date-time }
+        done: { type: boolean }

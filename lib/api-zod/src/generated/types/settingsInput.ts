@@ -13,4 +13,30 @@ export interface SettingsInput {
   defaultTone?: string;
   globalAutoReply?: boolean;
   escalateNegative?: boolean;
+  icpDescription?: string;
+  publicBaseUrl?: string;
+  trackOpens?: boolean;
+  unsubscribeFooter?: boolean;
+  /**
+     * @minimum 0
+     * @maximum 23
+     */
+  sendWindowStart?: number;
+  /**
+     * @minimum 1
+     * @maximum 24
+     */
+  sendWindowEnd?: number;
+  sendWeekdaysOnly?: boolean;
+  timezone?: string;
+  unipileDsn?: string;
+  /** Write-only; empty keeps the stored key */
+  unipileApiKey?: string;
+  unipileAccountId?: string;
+  linkedinDailyLimit?: number;
+  voiceApiBaseUrl?: string;
+  /** Write-only; empty keeps the stored key */
+  voiceApiKey?: string;
+  voicePhoneNumberId?: string;
+  voiceName?: string;
 }

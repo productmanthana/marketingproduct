@@ -16,4 +16,6 @@ export interface DashboardSummary {
   meetingsBooked: number;
   callsScheduled: number;
   needsReview: number;
+  emailsOpened?: number;
+  openTasks?: number;
 }

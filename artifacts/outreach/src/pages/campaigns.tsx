@@ -16,28 +16,28 @@ export default function Campaigns() {
   const [open, setOpen] = useState(false);
   return (
     <div>
-      <PageHeader eyebrow="Sequences" title="Campaigns">
+      <PageHeader eyebrow="Outreach" title="Campaigns">
         <Button onClick={() => setOpen(true)} data-testid="button-new-campaign"><Plus className="mr-1 h-4 w-4" />New campaign</Button>
       </PageHeader>
       <div className="p-6 md:p-8">
         {q.isLoading ? <Rows n={4} h={92} /> : q.isError ? <ErrorBox onRetry={() => q.refetch()} /> : !q.data?.length ? (
-          <Empty icon={Send} title="No campaigns yet" body="A campaign is a goal, a pitch, and a multichannel sequence the machine runs for you.">
+          <Empty icon={Send} title="No campaigns yet" body="A campaign is a series of messages (email, LinkedIn, calls) sent to a group of people. You set it up in 4 simple steps.">
             <Button onClick={() => setOpen(true)} data-testid="button-empty-new-campaign">Create the first one</Button>
           </Empty>
         ) : (
           <div className="overflow-hidden rounded-xl border border-card-border bg-card">
             <div className="hidden grid-cols-[1fr_140px_repeat(4,72px)_90px] gap-3 border-b border-border px-5 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground md:grid">
-              <span>Campaign</span><span>Channels</span><span className="text-right">Leads</span><span className="text-right">Sent</span><span className="text-right">Replies</span><span className="text-right">Mtgs</span><span className="text-right">Status</span>
+              <span>Campaign</span><span>Sends by</span><span className="text-right">People</span><span className="text-right">Sent</span><span className="text-right">Replies</span><span className="text-right">Meetings</span><span className="text-right">Status</span>
             </div>
             {q.data.map((c, i) => (
               <Link key={c.id} href={`/campaigns/${c.id}`} className="rise grid grid-cols-2 items-center gap-3 border-b border-border px-5 py-4 last:border-0 hover:bg-muted/40 md:grid-cols-[1fr_140px_repeat(4,72px)_90px]" style={{ animationDelay: `${i * 40}ms` }} data-testid={`link-campaign-${c.id}`}>
                 <div className="col-span-2 min-w-0 md:col-span-1">
                   <div className="font-display text-[17px] font-bold">{c.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">{c.goal} · {c.stepCount} steps{c.autoReply && <span className="ml-2 text-primary">AI auto-reply</span>}</div>
+                  <div className="truncate text-xs text-muted-foreground">{c.goal} · {c.stepCount} message{c.stepCount === 1 ? "" : "s"}{c.autoReply && <span className="ml-2 text-primary">AI answers replies</span>}</div>
                 </div>
                 <div className="flex gap-1">{c.channels.map((x) => <ChannelTag key={x} channel={x as Ch} compact />)}</div>
                 {[c.leadCount, c.sentCount, c.replyCount, c.meetingCount].map((n, j) => <span key={j} className="hidden text-right font-mono text-sm tnum md:block">{n}</span>)}
-                <div className="text-right"><Pill value={c.status} /></div>
+                <div className="text-right text-xs font-medium">{({ draft: "Not started", active: "Sending", paused: "Paused", completed: "Finished" } as Record<string, string>)[c.status] ?? c.status}</div>
               </Link>
             ))}
           </div>
@@ -59,7 +59,7 @@ function NewCampaign({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
   const submit = () => {
     if (!f.name.trim()) return;
     create.mutate({ data: { ...f, replyTone: f.replyTone || settings?.defaultTone || "friendly" } }, {
-      onSuccess: (c) => { refresh(); toast({ title: "Campaign created", description: "Now build the sequence." }); onOpenChange(false); nav(`/campaigns/${c.id}`); },
+      onSuccess: (c) => { refresh(); toast({ title: "Campaign created", description: "Next: add your messages." }); onOpenChange(false); nav(`/campaigns/${c.id}`); },
       onError: () => toast({ title: "Could not create campaign", variant: "destructive" }),
     });
   };
@@ -67,23 +67,13 @@ function NewCampaign({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle className="font-display text-xl">New campaign</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">Give it a name and say what you're offering. You'll write the messages and pick the people on the next screen.</p>
         <div className="grid gap-3">
-          <div><Label>Name</Label><Input value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="Q3 fintech CFOs" data-testid="input-campaign-name" /></div>
-          <div><Label>Goal</Label><Input value={f.goal} onChange={(e) => set("goal", e.target.value)} data-testid="input-campaign-goal" /></div>
-          <div><Label>Product pitch (the AI reads this)</Label><Textarea rows={3} value={f.productPitch} onChange={(e) => set("productPitch", e.target.value)} placeholder="What you sell, who it's for, why now." data-testid="input-campaign-pitch" /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>Reply tone</Label>
-              <select className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm" value={f.replyTone || settings?.defaultTone || "friendly"} onChange={(e) => set("replyTone", e.target.value)} data-testid="select-campaign-tone">
-                {TONE_OPTIONS.map((t) => <option key={t}>{t}</option>)}
-              </select></div>
-            <div><Label>Meeting link</Label><Input value={f.meetingLink} onChange={(e) => set("meetingLink", e.target.value)} placeholder="cal.com/you/20min" data-testid="input-campaign-meeting" /></div>
-          </div>
-          <label className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
-            <span><b>AI auto-reply</b><span className="block text-xs text-muted-foreground">Answer inbound replies in context automatically</span></span>
-            <Switch checked={f.autoReply} onCheckedChange={(v) => set("autoReply", v)} data-testid="switch-campaign-autoreply" />
-          </label>
+          <div><Label>Campaign name</Label><Input value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="Example: Clinics in Bangalore" data-testid="input-campaign-name" /></div>
+          <div><Label>What do you want people to do?</Label><Input value={f.goal} onChange={(e) => set("goal", e.target.value)} data-testid="input-campaign-goal" /></div>
+          <div><Label>What do you sell, and who is it for?</Label><Textarea rows={4} value={f.productPitch} onChange={(e) => set("productPitch", e.target.value)} placeholder="2–3 sentences. The AI uses this to write your messages and replies." data-testid="input-campaign-pitch" /></div>
         </div>
-        <DialogFooter><Button onClick={submit} disabled={!f.name.trim() || create.isPending} data-testid="button-create-campaign">{create.isPending ? "Creating..." : "Create campaign"}</Button></DialogFooter>
+        <DialogFooter><Button onClick={submit} disabled={!f.name.trim() || create.isPending} data-testid="button-create-campaign">{create.isPending ? "Creating..." : "Next: write messages"}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );

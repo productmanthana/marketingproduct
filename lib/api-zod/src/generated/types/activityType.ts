@@ -18,4 +18,10 @@ export const ActivityType = {
   status_change: 'status_change',
   lead_added: 'lead_added',
   campaign_run: 'campaign_run',
+  task_created: 'task_created',
+  lead_qualified: 'lead_qualified',
+  lead_enriched: 'lead_enriched',
+  email_opened: 'email_opened',
+  unsubscribed: 'unsubscribed',
+  delivery_failed: 'delivery_failed',
 } as const;

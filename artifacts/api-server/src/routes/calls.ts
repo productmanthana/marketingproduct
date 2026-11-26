@@ -1,14 +1,6 @@
 import { Router, type IRouter } from "express";
-import { asc, desc, eq } from "drizzle-orm";
-import {
-  db,
-  callsTable,
-  campaignsTable,
-  leadsTable,
-  outreachConversationsTable,
-  outreachMessagesTable,
-  type CallRow,
-} from "@workspace/db";
+import { desc, eq } from "drizzle-orm";
+import { db, callsTable, leadsTable, type CallRow } from "@workspace/db";
 import {
   CreateCallBody,
   GenerateCallScriptParams,
@@ -16,33 +8,18 @@ import {
   GetCallResponse,
   ListCallsQueryParams,
   ListCallsResponse,
+  StartAiCallParams,
   SummarizeCallParams,
   UpdateCallBody,
   UpdateCallParams,
 } from "@workspace/api-zod";
-import { generateCallScript, summarizeCall } from "../lib/ai";
-import {
-  getOrCreateConversation,
-  getSettings,
-  leadName,
-  logActivity,
-  recordOutbound,
-  serializeCalls,
-} from "../lib/outreach";
+import { startAiCall, summarizeAndFollowUp, writeScript } from "../lib/calls";
+import { leadName, logActivity, serializeCalls } from "../lib/outreach";
 
 const router: IRouter = Router();
 
 async function one(call: CallRow) {
   return GetCallResponse.parse((await serializeCalls([call]))[0]);
-}
-
-async function loadContext(call: CallRow) {
-  const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, call.leadId));
-  const campaignId = call.campaignId ?? lead!.campaignId;
-  const campaign = campaignId
-    ? ((await db.select().from(campaignsTable).where(eq(campaignsTable.id, campaignId)))[0] ?? null)
-    : null;
-  return { lead: lead!, campaign, settings: await getSettings() };
 }
 
 router.get("/calls", async (req, res): Promise<void> => {
@@ -146,22 +123,27 @@ router.post("/calls/:id/script", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Call not found" });
     return;
   }
-  const ctx = await loadContext(call);
-  // Include prior written touchpoints so the script can reference them.
-  const prior = await db
-    .select({ channel: outreachMessagesTable.channel, direction: outreachMessagesTable.direction, body: outreachMessagesTable.body })
-    .from(outreachMessagesTable)
-    .innerJoin(outreachConversationsTable, eq(outreachMessagesTable.conversationId, outreachConversationsTable.id))
-    .where(eq(outreachConversationsTable.leadId, call.leadId))
-    .orderBy(asc(outreachMessagesTable.createdAt))
-    .limit(10);
-  const script = await generateCallScript({
-    ...ctx,
-    objective: call.objective,
-    priorContext: prior.map((p) => `${p.direction === "inbound" ? "Prospect" : "Us"} via ${p.channel}: ${p.body.slice(0, 300)}`).join("\n"),
-  });
-  const [updated] = await db.update(callsTable).set({ script }).where(eq(callsTable.id, call.id)).returning();
+  await writeScript(call);
+  const [updated] = await db.select().from(callsTable).where(eq(callsTable.id, call.id));
   res.json(await one(updated!));
+});
+
+router.post("/calls/:id/ai-dial", async (req, res): Promise<void> => {
+  const params = StartAiCallParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [call] = await db.select().from(callsTable).where(eq(callsTable.id, params.data.id));
+  if (!call) {
+    res.status(404).json({ error: "Call not found" });
+    return;
+  }
+  try {
+    res.json(await one(await startAiCall(call)));
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+  }
 });
 
 router.post("/calls/:id/summarize", async (req, res): Promise<void> => {
@@ -175,51 +157,11 @@ router.post("/calls/:id/summarize", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Call not found" });
     return;
   }
-  if (!call.notes?.trim()) {
+  if (!call.notes?.trim() && !call.transcript?.trim()) {
     res.status(400).json({ error: "Add call notes before summarizing" });
     return;
   }
-  const ctx = await loadContext(call);
-  const result = await summarizeCall({ ...ctx, notes: call.notes, outcome: call.outcome });
-  const [updated] = await db
-    .update(callsTable)
-    .set({
-      summary: result.summary,
-      nextStep: result.nextStep,
-      outcome: call.outcome ?? result.outcome,
-      status: "completed",
-    })
-    .where(eq(callsTable.id, call.id))
-    .returning();
-  await db
-    .update(leadsTable)
-    .set({ status: result.leadStatus, lastContactedAt: new Date(), nextStepAt: null })
-    .where(eq(leadsTable.id, ctx.lead.id));
-
-  // Queue the recap email automatically when the lead has an email address.
-  if (ctx.lead.email && result.followUpEmail) {
-    const conv = await getOrCreateConversation(ctx.lead, "email", ctx.campaign?.id ?? null, result.followUpSubject);
-    await recordOutbound({
-      conversation: conv,
-      lead: { ...ctx.lead, status: result.leadStatus },
-      body: result.followUpEmail,
-      subject: result.followUpSubject,
-      author: "ai",
-    });
-    await logActivity({
-      type: "ai_reply",
-      description: `AI sent call recap email to ${leadName(ctx.lead)}`,
-      channel: "email",
-      leadId: ctx.lead.id,
-    });
-  }
-  await logActivity({
-    type: "call_completed",
-    description: `Call with ${leadName(ctx.lead)} summarized: ${result.outcome}`,
-    channel: "call",
-    leadId: ctx.lead.id,
-  });
-  res.json(await one(updated!));
+  res.json(await one(await summarizeAndFollowUp(call)));
 });
 
 export default router;

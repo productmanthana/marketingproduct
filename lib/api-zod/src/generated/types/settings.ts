@@ -15,4 +15,21 @@ export interface Settings {
   globalAutoReply: boolean;
   /** Route objections/negative replies to human review instead of auto replying */
   escalateNegative?: boolean;
+  icpDescription?: string;
+  /** Public URL of this app, used for open tracking, unsubscribe links and webhooks */
+  publicBaseUrl?: string;
+  trackOpens?: boolean;
+  unsubscribeFooter?: boolean;
+  sendWindowStart?: number;
+  sendWindowEnd?: number;
+  sendWeekdaysOnly?: boolean;
+  timezone?: string;
+  unipileDsn?: string;
+  unipileAccountId?: string;
+  unipileConnected?: boolean;
+  linkedinDailyLimit?: number;
+  voiceApiBaseUrl?: string;
+  voicePhoneNumberId?: string;
+  voiceName?: string;
+  voiceConnected?: boolean;
 }

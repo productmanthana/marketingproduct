@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useSearch } from "wouter";
-import { Plus, Search, Upload, Users } from "lucide-react";
-import { useListLeads, useListCampaigns, useCreateLead, useImportLeads } from "@workspace/api-client-react";
+import { Plus, Search, Sparkles, Upload, Users } from "lucide-react";
+import { useListLeads, useListCampaigns, useCreateLead, useImportLeads, useQualifyLeads } from "@workspace/api-client-react";
 import type { LeadInput, LeadStatus } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { PageHeader, Rows, ErrorBox, Empty, Pill, Initials, ago, label, useRefreshAll } from "@/components/bits";
+import { PageHeader, Rows, ErrorBox, Empty, Pill, Initials, AiWorking, ago, label, errMsg, useRefreshAll } from "@/components/bits";
+import { FitBadge } from "@/components/fit-badge";
 
 const STATUSES = ["new", "contacted", "replied", "interested", "meeting_booked", "not_interested", "unsubscribed"];
 const sel = "h-9 rounded-md border border-input bg-card px-2 text-sm capitalize";
@@ -23,14 +24,26 @@ export default function Leads() {
   const [imp, setImp] = useState(false);
   const q = useListLeads({ search: search || undefined, status: (status || undefined) as LeadStatus | undefined, campaignId: campaignId ? Number(campaignId) : undefined });
   const camps = useListCampaigns();
+  const qualify = useQualifyLeads();
+  const refresh = useRefreshAll();
+  const { toast } = useToast();
+  const unscored = q.data?.filter((l) => l.fitScore == null).length ?? 0;
 
   return (
     <div>
       <PageHeader eyebrow="Database" title="Leads">
+        <Button variant="outline" disabled={qualify.isPending || !q.data?.length} data-testid="button-qualify-leads"
+          onClick={() => qualify.mutate({ data: unscored ? {} : { leadIds: q.data!.map((l) => l.id) } }, {
+            onSuccess: (r) => { refresh(); toast({ title: `Scored ${r.qualified} leads` }); },
+            onError: (e) => toast({ title: "Could not score leads", description: errMsg(e), variant: "destructive" }),
+          })}>
+          <Sparkles className="mr-1 h-4 w-4 text-primary" />{qualify.isPending ? "Scoring..." : unscored ? `Score ${unscored} with AI` : "Rescore all"}
+        </Button>
         <Button variant="outline" onClick={() => setImp(true)} data-testid="button-import-leads"><Upload className="mr-1 h-4 w-4" />Import CSV</Button>
         <Button onClick={() => setAdd(true)} data-testid="button-add-lead"><Plus className="mr-1 h-4 w-4" />Add lead</Button>
       </PageHeader>
       <div className="space-y-4 p-6 md:p-8">
+        {qualify.isPending && <AiWorking text="Scoring each lead against your ideal customer profile" />}
         <div className="flex flex-wrap gap-2">
           <div className="relative min-w-[220px] flex-1"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input className="pl-9" placeholder="Search name, company, email" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-lead-search" /></div>
@@ -50,7 +63,7 @@ export default function Leads() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="border-b border-border text-left font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  <th className="px-4 py-2 font-normal">Lead</th><th className="px-3 font-normal">Company</th><th className="px-3 font-normal">Campaign</th><th className="px-3 font-normal">Step</th><th className="px-3 font-normal">Last touch</th><th className="px-4 text-right font-normal">Status</th>
+                  <th className="px-4 py-2 font-normal">Lead</th><th className="px-3 font-normal">Company</th><th className="px-3 font-normal">Fit</th><th className="px-3 font-normal">Campaign</th><th className="px-3 font-normal">Step</th><th className="px-3 font-normal">Last touch</th><th className="px-4 text-right font-normal">Status</th>
                 </tr></thead>
                 <tbody>
                   {q.data.map((l, i) => (
@@ -58,6 +71,7 @@ export default function Leads() {
                       <td className="px-4 py-2"><Link href={`/leads/${l.id}`} className="flex items-center gap-2.5" data-testid={`link-lead-${l.id}`}><Initials name={`${l.firstName} ${l.lastName}`} className="h-7 w-7 text-[10px]" />
                         <span><span className="block font-medium hover:text-primary">{l.firstName} {l.lastName}</span><span className="block text-xs text-muted-foreground">{l.email ?? l.title}</span></span></Link></td>
                       <td className="px-3"><div>{l.company ?? "-"}</div><div className="text-xs text-muted-foreground">{l.title}</div></td>
+                      <td className="px-3"><FitBadge score={l.fitScore} reason={l.fitReason} /></td>
                       <td className="px-3 text-xs">{l.campaignId ? <Link href={`/campaigns/${l.campaignId}`} className="hover:text-primary">{l.campaignName}</Link> : <span className="text-muted-foreground">unassigned</span>}</td>
                       <td className="px-3 font-mono text-xs">{l.currentStep ?? 0}</td>
                       <td className="px-3 font-mono text-xs text-muted-foreground">{ago(l.lastContactedAt)}</td>
@@ -77,7 +91,7 @@ export default function Leads() {
 }
 
 type C = { id: number; name: string };
-const FIELDS = ["firstName", "lastName", "email", "phone", "linkedinUrl", "company", "title", "industry"] as const;
+const FIELDS = ["firstName", "lastName", "email", "phone", "linkedinUrl", "company", "title", "industry", "website"] as const;
 
 function AddLead({ onClose, campaigns }: { onClose: () => void; campaigns: C[] }) {
   const create = useCreateLead();
@@ -139,7 +153,7 @@ function ImportLeads({ onClose, campaigns }: { onClose: () => void; campaigns: C
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader><DialogTitle className="font-display text-xl">Import leads from CSV</DialogTitle></DialogHeader>
-        <p className="font-mono text-[11px] text-muted-foreground">firstName,lastName,email,phone,linkedinUrl,company,title,industry</p>
+        <p className="font-mono text-[11px] text-muted-foreground">firstName,lastName,email,phone,linkedinUrl,company,title,industry,website</p>
         <Textarea rows={8} className="font-mono text-xs" value={text} onChange={(e) => setText(e.target.value)} placeholder={"firstName,lastName,email,phone,linkedinUrl,company,title,industry\nMarta,Okafor,marta@lumenfreight.io,+14155550142,,Lumen Freight,VP Ops,Logistics"} data-testid="input-csv" />
         {!!parsed.length && (
           <div className="max-h-40 overflow-auto rounded-lg border border-border text-xs">
