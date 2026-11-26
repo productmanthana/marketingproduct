@@ -315,6 +315,7 @@ export async function recordOutbound(args: {
       deliveryStatus: delivery.status,
       deliveryError: delivery.status === "failed" ? delivery.error : null,
       externalId: delivery.status === "sent" ? delivery.externalId : null,
+      ...(delivery.status === "sent" && delivery.subject ? { subject: delivery.subject } : {}),
     })
     .where(eq(outreachMessagesTable.id, inserted!.id))
     .returning();

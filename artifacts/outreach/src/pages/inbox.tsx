@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearch } from "wouter";
 import { Bot, Inbox as InboxIcon, Send, Sparkles, FlaskConical, User, RefreshCw, Eye, AlertTriangle } from "lucide-react";
 import {
-  useListConversations, useGetConversation, getGetConversationQueryKey, useUpdateConversation, useSendMessage, useReceiveInbound, useDraftAiReply, useSyncMailboxes,
+  useListConversations, getListConversationsQueryKey, useGetConversation, getGetConversationQueryKey, useUpdateConversation, useSendMessage, useReceiveInbound, useDraftAiReply, useSyncMailboxes,
 } from "@workspace/api-client-react";
 import type { AiDraft, Channel, ConversationStatus, Message } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,8 @@ export default function Inbox() {
   const [channel, setChannel] = useState("");
   const [status, setStatus] = useState("");
   const [sel, setSel] = useState<number | null>(initial);
-  const q = useListConversations({ channel: (channel || undefined) as Channel | undefined, status: (status || undefined) as ConversationStatus | undefined });
+  const params = { channel: (channel || undefined) as Channel | undefined, status: (status || undefined) as ConversationStatus | undefined };
+  const q = useListConversations(params, { query: { queryKey: getListConversationsQueryKey(params), refetchInterval: 20_000 } });
   const sync = useSyncMailboxes();
   const refresh = useRefreshAll();
   const { toast } = useToast();
@@ -103,7 +104,7 @@ function Delivery({ m }: { m: Message }) {
 }
 
 function Thread({ id, onBack }: { id: number; onBack: () => void }) {
-  const q = useGetConversation(id, { query: { enabled: !!id, queryKey: getGetConversationQueryKey(id) } });
+  const q = useGetConversation(id, { query: { enabled: !!id, queryKey: getGetConversationQueryKey(id), refetchInterval: 20_000 } });
   const upd = useUpdateConversation();
   const send = useSendMessage();
   const inbound = useReceiveInbound();

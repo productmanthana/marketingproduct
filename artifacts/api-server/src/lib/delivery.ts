@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -14,7 +14,7 @@ import {
 
 /** Outcome of handing a message to a real provider. */
 export type DeliveryResult =
-  | { status: "sent"; externalId: string | null; mailboxId?: number; threadId?: string | null; note?: string }
+  | { status: "sent"; externalId: string | null; mailboxId?: number; threadId?: string | null; note?: string; subject?: string }
   | { status: "recorded" }
   | { status: "failed"; error: string };
 
@@ -75,6 +75,16 @@ function baseUrl(settings: SettingsRow): string {
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+async function latestInboundSubject(conversationId: number): Promise<string | null> {
+  const [row] = await db
+    .select({ subject: outreachMessagesTable.subject })
+    .from(outreachMessagesTable)
+    .where(and(eq(outreachMessagesTable.conversationId, conversationId), eq(outreachMessagesTable.direction, "inbound"), isNotNull(outreachMessagesTable.subject)))
+    .orderBy(desc(outreachMessagesTable.createdAt))
+    .limit(1);
+  return row?.subject || null;
+}
+
 /** Message-IDs of the email thread, oldest first, for the In-Reply-To/References headers. */
 async function threadReferences(conversationId: number, threadId: string): Promise<string[]> {
   const rows = await db
@@ -115,7 +125,8 @@ export async function sendEmail(args: {
   // Follow-ups in an existing thread keep "Re: <original subject>" and reply to the latest message,
   // otherwise Gmail/Outlook split them into a new conversation.
   const references = threadId ? await threadReferences(args.conversation.id, threadId) : [];
-  const rootSubject = (args.conversation.subject ?? args.subject ?? "").replace(/^(re:\s*)+/i, "");
+  // Answer in the thread the lead last replied in (their latest "Re: ..." subject), else the first email's subject.
+  const rootSubject = ((threadId ? await latestInboundSubject(args.conversation.id) : null) ?? args.conversation.subject ?? args.subject ?? "").replace(/^(re:\s*)+/i, "");
   const subject = threadId && rootSubject ? `Re: ${rootSubject}` : (args.subject ?? args.conversation.subject ?? "(no subject)");
   try {
     const info = await transportFor(box).sendMail({
@@ -132,7 +143,7 @@ export async function sendEmail(args: {
       .update(mailboxesTable)
       .set({ sentToday: isNewDay ? 1 : box.sentToday + 1, sentDate: today(), lastError: null })
       .where(eq(mailboxesTable.id, box.id));
-    return { status: "sent", externalId: info.messageId ?? null, mailboxId: box.id, threadId: threadId ?? info.messageId ?? null };
+    return { status: "sent", externalId: info.messageId ?? null, mailboxId: box.id, threadId: threadId ?? info.messageId ?? null, subject };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     await db.update(mailboxesTable).set({ lastError: error }).where(eq(mailboxesTable.id, box.id));
