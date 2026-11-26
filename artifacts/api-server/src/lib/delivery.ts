@@ -1,9 +1,10 @@
 import nodemailer from "nodemailer";
-import { eq } from "drizzle-orm";
+import { and, asc, eq, isNotNull } from "drizzle-orm";
 import {
   db,
   leadsTable,
   mailboxesTable,
+  outreachMessagesTable,
   usageCountersTable,
   type ConversationRow,
   type LeadRow,
@@ -74,6 +75,17 @@ function baseUrl(settings: SettingsRow): string {
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+/** Message-IDs of the email thread, oldest first, for the In-Reply-To/References headers. */
+async function threadReferences(conversationId: number, threadId: string): Promise<string[]> {
+  const rows = await db
+    .select({ id: outreachMessagesTable.externalId })
+    .from(outreachMessagesTable)
+    .where(and(eq(outreachMessagesTable.conversationId, conversationId), isNotNull(outreachMessagesTable.externalId)))
+    .orderBy(asc(outreachMessagesTable.createdAt));
+  const ids = rows.map((r) => r.id!).filter((id) => id.startsWith("<"));
+  return [...new Set([threadId, ...ids])];
+}
+
 export async function sendEmail(args: {
   settings: SettingsRow;
   conversation: ConversationRow;
@@ -100,14 +112,19 @@ export async function sendEmail(args: {
     html += `<img src="${base}/api/t/${args.trackingToken}.gif" width="1" height="1" alt="" style="display:none">`;
   }
   const threadId = args.conversation.externalThreadId;
+  // Follow-ups in an existing thread keep "Re: <original subject>" and reply to the latest message,
+  // otherwise Gmail/Outlook split them into a new conversation.
+  const references = threadId ? await threadReferences(args.conversation.id, threadId) : [];
+  const rootSubject = (args.conversation.subject ?? args.subject ?? "").replace(/^(re:\s*)+/i, "");
+  const subject = threadId && rootSubject ? `Re: ${rootSubject}` : (args.subject ?? args.conversation.subject ?? "(no subject)");
   try {
     const info = await transportFor(box).sendMail({
       from: { name: box.fromName, address: box.fromEmail },
       to: args.lead.email,
-      subject: args.subject ?? args.conversation.subject ?? "(no subject)",
+      subject,
       text,
       html,
-      ...(threadId ? { inReplyTo: threadId, references: [threadId] } : {}),
+      ...(threadId ? { inReplyTo: references.at(-1), references } : {}),
       ...(unsubUrl ? { list: { unsubscribe: { url: unsubUrl, comment: "Unsubscribe" } } } : {}),
     });
     const isNewDay = box.sentDate !== today();
