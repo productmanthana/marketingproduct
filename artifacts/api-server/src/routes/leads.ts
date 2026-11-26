@@ -116,7 +116,14 @@ async function applyCompanyDetails(lead: LeadRowT): Promise<LeadRowT> {
   const site = websiteFor(lead);
   if (!site) return lead;
   const domain = new URL(site).hostname.replace(/^www\./, "");
-  const org = await enrichOrganization(domain);
+  const org = await enrichOrganization(domain).catch((err: { status?: number }) => {
+    // Apollo can't read this lead's domain (bad/unknown website): skip it, keep the rest of the batch going.
+    if (err?.status && err.status >= 400 && err.status < 500 && err.status !== 429) {
+      logger.info({ leadId: lead.id, domain }, "Apollo has no company details for this domain");
+      return null;
+    }
+    throw err;
+  });
   if (!org) return lead;
   const patch = {
     company: lead.company || org.company,
