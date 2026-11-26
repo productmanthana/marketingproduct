@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { WaitPicker } from "@/components/wait-picker";
 import { QuickAddPerson } from "@/components/quick-add-person";
 import { SpreadsheetToCampaign } from "@/components/spreadsheet-upload";
+import { RecipientList } from "@/components/recipient-list";
 import { PageHeader, Panel, Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, useRefreshAll, CH, chColor, TONE_OPTIONS, ago, errMsg, type Ch } from "@/components/bits";
 
 const STATE_LABEL: Record<string, string> = { draft: "Not started", active: "Sending", paused: "Paused", completed: "Finished" };
@@ -245,6 +246,7 @@ export default function CampaignDetail() {
                 {c.autoReply ? " When someone replies, the AI answers for you (anything negative waits for you in the Inbox)." : " Replies wait for you in the Inbox."}
               </p>
             )}
+            <RecipientList leads={c.leads} />
             <div className="flex flex-wrap gap-2">
               <Button size="lg" disabled={run.isPending || !!missing} onClick={runIt} data-testid="button-run-campaign">
                 <Rocket className={`mr-1.5 h-4 w-4 ${run.isPending ? "animate-bounce" : ""}`} />{run.isPending ? "Sending..." : started ? "Send anything due now" : "Start sending"}
