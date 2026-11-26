@@ -156,7 +156,10 @@ export default function CampaignDetail() {
             </div>
           ) : (
             <ol className="relative p-4">
-              {steps.map((s, i) => <StepRow key={s.id} s={s} i={i} last={i === steps.length - 1} campaignId={id} prev={steps[i - 1]} next={steps[i + 1]} onEdit={() => setStepEdit(s)} onPreview={() => setPreview(s)} />)}
+              {steps.length > 1 && <li className="mb-4 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground" data-testid="text-followup-explainer">
+                Each person gets message 1 first. <b className="text-foreground">If they don't reply</b>, the next one goes out a few days later, sometimes on a different channel (email, LinkedIn or a phone call) so they have more chances to see it. As soon as they reply, the rest stop.
+              </li>}
+              {steps.map((s, i) => <StepRow key={s.id} s={s} i={i} day={1 + steps.slice(1, i + 1).reduce((d, x) => d + x.delayDays, 0)} last={i === steps.length - 1} campaignId={id} prev={steps[i - 1]} next={steps[i + 1]} onEdit={() => setStepEdit(s)} onPreview={() => setPreview(s)} />)}
             </ol>
           )}
           <WizardNav onBack={() => go(1)} onNext={() => go(3)} nextDisabled={!steps.length} hint={!steps.length ? "Add at least one message to continue." : null} />
@@ -280,7 +283,9 @@ function SettingsForm({ c, onSave, saving }: { c: CampaignLike; onSave: (d: { na
   );
 }
 
-function StepRow({ s, i, last, campaignId, prev, next, onEdit, onPreview }: { s: SequenceStep; i: number; last: boolean; campaignId: number; prev?: SequenceStep; next?: SequenceStep; onEdit: () => void; onPreview: () => void }) {
+const ROW_LABEL: Record<Ch, string> = { email: "Email", linkedin: "LinkedIn message", call: "Phone call" };
+
+function StepRow({ s, i, day, last, campaignId, prev, next, onEdit, onPreview }: { s: SequenceStep; i: number; day: number; last: boolean; campaignId: number; prev?: SequenceStep; next?: SequenceStep; onEdit: () => void; onPreview: () => void }) {
   const upd = useUpdateSequenceStep();
   const del = useDeleteSequenceStep();
   const refresh = useRefreshAll();
@@ -298,9 +303,8 @@ function StepRow({ s, i, last, campaignId, prev, next, onEdit, onPreview }: { s:
       <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white" style={{ background: chColor(ch) }}><I className="h-4 w-4" /></div>
       <div className="group min-w-0 flex-1 rounded-lg border border-border bg-background/60 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold">Message {i + 1}</span>
-          <ChannelTag channel={ch} />
-          <span className="text-xs text-muted-foreground">{i === 0 ? "sent right away when you start" : s.delayDays === 0 ? "same day as the previous one" : `${s.delayDays} day${s.delayDays === 1 ? "" : "s"} after the previous one`}{ch === "call" && " · added to your call list"}</span>
+          <span className="text-sm font-semibold" style={{ color: chColor(ch) }}>Day {day}: {ROW_LABEL[ch]}</span>
+          <span className="text-xs text-muted-foreground">{i === 0 ? "sent right away when you start" : "only if they haven't replied yet"}{ch === "call" && " · added to your call list"}</span>
           <div className="ml-auto flex gap-0.5 opacity-60 group-hover:opacity-100">
             <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!prev || upd.isPending} onClick={() => swap(prev)} data-testid={`button-step-up-${s.id}`}><ArrowUp className="h-3.5 w-3.5" /></Button>
             <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!next || upd.isPending} onClick={() => swap(next)} data-testid={`button-step-down-${s.id}`}><ArrowDown className="h-3.5 w-3.5" /></Button>
