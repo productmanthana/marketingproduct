@@ -12,6 +12,7 @@ export function SpreadsheetPicker({ onParsed }: { onParsed: (leads: LeadInput[])
   const [names, setNames] = useState<string[]>([]);
   const [leads, setLeads] = useState<LeadInput[]>([]);
   const [busy, setBusy] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const { toast } = useToast();
 
   const pick = async (files: File[]) => {
@@ -19,7 +20,7 @@ export function SpreadsheetPicker({ onParsed }: { onParsed: (leads: LeadInput[])
     setBusy(true);
     try {
       const out = await leadsFromFiles(files);
-      setNames(files.map((f) => f.name)); setLeads(out); onParsed(out);
+      setNames(files.map((f) => f.name)); setLeads(out); setShowAll(false); onParsed(out);
       if (!out.length) toast({ title: "No people found in that file", description: "Make sure it has a header row with columns like Name, Company, Email or Phone.", variant: "destructive" });
     } catch (e) {
       toast({ title: "Couldn't read that file", description: errMsg(e), variant: "destructive" });
@@ -43,15 +44,19 @@ export function SpreadsheetPicker({ onParsed }: { onParsed: (leads: LeadInput[])
           <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-muted-foreground" data-testid="text-spreadsheet-summary">
             <b className="text-foreground">{leads.length} people</b> · {count((l) => l.email)} with email · {count((l) => l.phone)} with phone · {count((l) => l.linkedinUrl)} with LinkedIn · {count((l) => l.firstName === "Team")} company-only (no named person)
           </div>
-          <div className="max-h-40 overflow-auto">
-            {leads.slice(0, 8).map((l, i) => (
+          <div className={`${showAll ? "max-h-72" : "max-h-40"} overflow-auto`}>
+            {(showAll ? leads : leads.slice(0, 8)).map((l, i) => (
               <div key={i} className="grid grid-cols-3 gap-2 border-b border-border px-3 py-1.5 last:border-0">
                 <b className="truncate">{l.firstName} {l.lastName}{l.title && <span className="ml-1 font-normal text-muted-foreground">{l.title}</span>}</b>
                 <span className="truncate">{l.email ?? l.phone ?? "—"}</span>
                 <span className="truncate text-muted-foreground">{l.company}</span>
               </div>
             ))}
-            {leads.length > 8 && <div className="px-3 py-1.5 text-muted-foreground">+ {leads.length - 8} more</div>}
+            {leads.length > 8 && (
+              <button type="button" onClick={() => setShowAll(!showAll)} className="w-full px-3 py-1.5 text-left font-medium text-primary hover:underline" data-testid="button-toggle-all-preview">
+                {showAll ? "Show fewer" : `+ ${leads.length - 8} more (show all)`}
+              </button>
+            )}
           </div>
         </div>
       )}
