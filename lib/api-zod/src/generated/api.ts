@@ -172,7 +172,10 @@ export const SearchProspectsResponse = zod.object({
   "location": zod.string().nullish(),
   "linkedinUrl": zod.string().nullish(),
   "hasEmail": zod.boolean(),
-  "alreadyImported": zod.boolean()
+  "alreadyImported": zod.boolean(),
+  "leadId": zod.int().nullish().describe('The lead this person was added as before'),
+  "campaignId": zod.int().nullish().describe('Campaign that lead is in now'),
+  "campaignName": zod.string().nullish()
 })),
   "total": zod.int(),
   "page": zod.int(),

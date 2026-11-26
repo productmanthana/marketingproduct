@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { inArray } from "drizzle-orm";
-import { db, leadsTable } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
+import { campaignsTable, db, leadsTable } from "@workspace/db";
 import {
   GetProspectStatusResponse,
   ImportProspectsBody,
@@ -35,13 +35,26 @@ router.post("/prospects/search", async (req, res): Promise<void> => {
     const result = await searchPeople(parsed.data);
     const ids = result.people.map((p) => p.apolloId);
     const existing = ids.length
-      ? await db.select({ apolloId: leadsTable.apolloId }).from(leadsTable).where(inArray(leadsTable.apolloId, ids))
+      ? await db
+          .select({ apolloId: leadsTable.apolloId, leadId: leadsTable.id, campaignId: leadsTable.campaignId, campaignName: campaignsTable.name })
+          .from(leadsTable)
+          .leftJoin(campaignsTable, eq(campaignsTable.id, leadsTable.campaignId))
+          .where(inArray(leadsTable.apolloId, ids))
       : [];
-    const have = new Set(existing.map((e) => e.apolloId));
+    const have = new Map(existing.map((e) => [e.apolloId, e]));
     res.json(
       SearchProspectsResponse.parse({
         ...result,
-        people: result.people.map((p) => ({ ...p, alreadyImported: have.has(p.apolloId) })),
+        people: result.people.map((p) => {
+          const lead = have.get(p.apolloId);
+          return {
+            ...p,
+            alreadyImported: !!lead,
+            leadId: lead?.leadId ?? null,
+            campaignId: lead?.campaignId ?? null,
+            campaignName: lead?.campaignName ?? null,
+          };
+        }),
       }),
     );
   } catch (err) {

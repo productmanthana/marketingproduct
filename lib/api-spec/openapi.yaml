@@ -1056,6 +1056,9 @@ components:
         linkedinUrl: { type: ["string", "null"] }
         hasEmail: { type: boolean }
         alreadyImported: { type: boolean }
+        leadId: { type: ["integer", "null"], description: "The lead this person was added as before" }
+        campaignId: { type: ["integer", "null"], description: "Campaign that lead is in now" }
+        campaignName: { type: ["string", "null"] }
     ProspectSearchResult:
       type: object
       required: [people, total, page, totalPages]

@@ -1,7 +1,7 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronLeft, Lock, Pause, Play, Eye, Pencil, Plus, Rocket, RotateCcw, Sparkles, Trash2, Upload, UserPlus, Users, Workflow } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronLeft, Lock, Pause, Play, Eye, Pencil, Plus, Rocket, RotateCcw, Search, Sparkles, Trash2, Upload, UserPlus, Users, Workflow } from "lucide-react";
 import {
   useGetCampaign, useUpdateCampaign, useDeleteCampaign, useAddSequenceStep, useUpdateSequenceStep, useDeleteSequenceStep,
   useEnrollLeads, useGenerateCampaignSequence, useRunCampaign, useListLeads, usePreviewSequenceStep, useWriteCampaignPitch, useUpdateLead,
@@ -21,6 +21,7 @@ import { SendPace, gapLabel } from "@/components/send-pace";
 import { PersonWaitPicker } from "@/components/person-wait-picker";
 import { QuickAddPerson } from "@/components/quick-add-person";
 import { SpreadsheetToCampaign } from "@/components/spreadsheet-upload";
+import { ApolloToCampaign } from "@/components/apollo-to-campaign";
 import { RecipientList } from "@/components/recipient-list";
 import { PageHeader, Panel, Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, useRefreshAll, CH, chColor, TONE_OPTIONS, ago, errMsg, type Ch } from "@/components/bits";
 
@@ -175,7 +176,7 @@ export default function CampaignDetail() {
           <WizardNav onBack={() => go(1)} onNext={() => go(3)} nextDisabled={!steps.length} hint={!steps.length ? "Add at least one message to continue." : null} />
         </FlowSection>}
 
-        {cur === 3 && <FlowSection n={3} title="Who should receive them?" hint="Click Add people to type someone in, upload a spreadsheet, or pick from your lead list. Need more? Find them on the Find leads page." done={c.leads.length > 0}
+        {cur === 3 && <FlowSection n={3} title="Who should receive them?" hint="Click Add people to type someone in, upload a spreadsheet, search Apollo, or pick from your lead list." done={c.leads.length > 0}
           action={<Button size="sm" variant={c.leads.length ? "outline" : "default"} onClick={() => setEnroll(true)} data-testid="button-enroll-leads"><UserPlus className="mr-1 h-3.5 w-3.5" />Add people</Button>}>
           {!c.leads.length ? (
             <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
@@ -450,17 +451,19 @@ function EnrollDialog({ campaignId, enrolled, onClose }: { campaignId: number; e
   const { toast } = useToast();
   const [sel, setSel] = useState<number[]>([]);
   const avail = (q.data ?? []).filter((l) => !enrolled.includes(l.id));
-  const [mode, setMode] = useState<"type" | "sheet" | null>(null);
+  const [mode, setMode] = useState<"type" | "sheet" | "apollo" | null>(null);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className={mode === "apollo" ? "max-w-2xl" : "max-w-lg"}>
         <DialogHeader><DialogTitle className="font-display text-xl">Add people to this campaign</DialogTitle></DialogHeader>
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant={mode === "type" ? "default" : "outline"} onClick={() => setMode(mode === "type" ? null : "type")} data-testid="button-show-quick-add"><Plus className="mr-1.5 h-4 w-4" />Type in a person</Button>
-          <Button variant={mode === "sheet" ? "default" : "outline"} onClick={() => setMode(mode === "sheet" ? null : "sheet")} data-testid="button-show-spreadsheet"><Upload className="mr-1.5 h-4 w-4" />Upload a spreadsheet</Button>
+        <div className="grid grid-cols-3 gap-2">
+          <Button variant={mode === "type" ? "default" : "outline"} onClick={() => setMode(mode === "type" ? null : "type")} size="sm" className="px-2 text-xs" data-testid="button-show-quick-add"><Plus className="mr-1.5 h-4 w-4" />Type in a person</Button>
+          <Button variant={mode === "sheet" ? "default" : "outline"} onClick={() => setMode(mode === "sheet" ? null : "sheet")} size="sm" className="px-2 text-xs" data-testid="button-show-spreadsheet"><Upload className="mr-1.5 h-4 w-4" />Upload spreadsheet</Button>
+          <Button variant={mode === "apollo" ? "default" : "outline"} onClick={() => setMode(mode === "apollo" ? null : "apollo")} size="sm" className="px-2 text-xs" data-testid="button-show-apollo"><Search className="mr-1.5 h-4 w-4" />Search Apollo</Button>
         </div>
         {mode === "type" && <QuickAddPerson campaignId={campaignId} onDone={onClose} />}
         {mode === "sheet" && <SpreadsheetToCampaign campaignId={campaignId} onDone={onClose} />}
+        {mode === "apollo" && <ApolloToCampaign campaignId={campaignId} onDone={onClose} />}
         <div className="text-xs font-medium text-muted-foreground">Or pick from your lead list</div>
         <Input placeholder="Search by name, company or email" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-enroll-search" />
         <div className="max-h-80 overflow-y-auto rounded-lg border border-border">
