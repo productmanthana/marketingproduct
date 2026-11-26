@@ -65,9 +65,9 @@ export default function Leads() {
             </Empty>
           ) : (
             <div className="max-h-[60vh] overflow-auto" data-testid="leads-table-scroll">
-              <table className="w-full min-w-[900px] whitespace-nowrap text-sm">
+              <table className="w-full min-w-[1500px] whitespace-nowrap text-sm">
                 <thead className="sticky top-0 z-10 bg-card"><tr className="border-b border-border text-left font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  <th className="px-4 py-2 font-normal">Lead</th><th className="px-3 font-normal">Company</th><th className="px-3 font-normal">Fit</th><th className="px-3 font-normal">Campaign</th><th className="px-3 font-normal">Step</th><th className="px-3 font-normal">Last touch</th><th className="px-4 text-right font-normal">Status</th><th className="w-10" />
+                  <th className="px-4 py-2 font-normal">Lead</th><th className="px-3 font-normal">Company</th><th className="px-3 font-normal">Email</th><th className="px-3 font-normal">Phone</th><th className="px-3 font-normal">LinkedIn</th><th className="px-3 font-normal">Industry</th><th className="px-3 font-normal">Website</th><th className="px-3 font-normal">Fit</th><th className="px-3 font-normal">Campaign</th><th className="px-3 font-normal">Step</th><th className="px-3 font-normal">Last touch</th><th className="px-4 text-right font-normal">Status</th><th className="w-10" />
                 </tr></thead>
                 <tbody>
                   {q.data.map((l, i) => (
@@ -75,6 +75,11 @@ export default function Leads() {
                       <td className="px-4 py-2"><Link href={`/leads/${l.id}`} className="flex items-center gap-2.5" data-testid={`link-lead-${l.id}`}><Initials name={`${l.firstName} ${l.lastName}`} className="h-7 w-7 text-[10px]" />
                         <span><span className="block font-medium hover:text-primary">{l.firstName} {l.lastName}</span><span className="block text-xs text-muted-foreground">{l.email ?? l.title}</span></span></Link></td>
                       <td className="px-3"><div>{l.company ?? "-"}</div><div className="text-xs text-muted-foreground">{l.title}</div></td>
+                      <td className="px-3 text-xs">{l.email ? <a href={`mailto:${l.email}`} className="hover:text-primary">{l.email}</a> : <Dash />}</td>
+                      <td className="px-3 font-mono text-xs">{l.phone || <Dash />}</td>
+                      <td className="px-3 text-xs">{l.linkedinUrl ? <a href={l.linkedinUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">Profile</a> : <Dash />}</td>
+                      <td className="px-3 text-xs">{l.industry || <Dash />}</td>
+                      <td className="max-w-[180px] truncate px-3 text-xs">{l.website ? <a href={l.website.startsWith("http") ? l.website : `https://${l.website}`} target="_blank" rel="noreferrer" className="hover:text-primary">{l.website.replace(/^https?:\/\//, "")}</a> : <Dash />}</td>
                       <td className="px-3"><FitBadge score={l.fitScore} reason={l.fitReason} /></td>
                       <td className="px-3 text-xs">{l.campaignId ? <Link href={`/campaigns/${l.campaignId}`} className="hover:text-primary">{l.campaignName}</Link> : <span className="text-muted-foreground">unassigned</span>}</td>
                       <td className="px-3 font-mono text-xs">{l.currentStep ?? 0}</td>
@@ -95,6 +100,8 @@ export default function Leads() {
     </div>
   );
 }
+
+const Dash = () => <span className="text-muted-foreground">-</span>;
 
 type C = { id: number; name: string };
 const FIELDS = ["firstName", "lastName", "email", "phone", "linkedinUrl", "company", "title", "industry", "website"] as const;
