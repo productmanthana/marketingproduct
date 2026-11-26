@@ -64,9 +64,9 @@ export default function Leads() {
               <Button size="sm" onClick={() => setImp(true)} data-testid="button-empty-import">Import spreadsheet</Button>
             </Empty>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead><tr className="border-b border-border text-left font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+            <div className="max-h-[60vh] overflow-auto" data-testid="leads-table-scroll">
+              <table className="w-full min-w-[900px] whitespace-nowrap text-sm">
+                <thead className="sticky top-0 z-10 bg-card"><tr className="border-b border-border text-left font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                   <th className="px-4 py-2 font-normal">Lead</th><th className="px-3 font-normal">Company</th><th className="px-3 font-normal">Fit</th><th className="px-3 font-normal">Campaign</th><th className="px-3 font-normal">Step</th><th className="px-3 font-normal">Last touch</th><th className="px-4 text-right font-normal">Status</th><th className="w-10" />
                 </tr></thead>
                 <tbody>
