@@ -23,7 +23,8 @@ import { hasEmailCapacity, linkedinQuotaLeft, sendEmail, sendLinkedIn, unipileCo
 import { logger } from "./logger";
 import { ensureDealForBookedLead } from "./crm";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 /** Leads in these statuses still receive automated sequence steps. */
 const SEQUENCE_ACTIVE_STATUSES = ["new", "contacted"];
 
@@ -536,7 +537,7 @@ async function advanceLead(
     .update(leadsTable)
     .set({
       currentStep: nextIndex,
-      nextStepAt: next ? new Date(Date.now() + (immediate ? 0 : next.delayDays * DAY_MS)) : null,
+      nextStepAt: next ? new Date(Date.now() + (immediate ? 0 : next.delayDays * DAY_MS + next.delayHours * HOUR_MS)) : null,
       status: lead.status === "new" ? "contacted" : lead.status,
     })
     .where(eq(leadsTable.id, lead.id));

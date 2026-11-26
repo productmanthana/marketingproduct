@@ -1212,13 +1212,14 @@ components:
         status: { $ref: "#/components/schemas/CampaignStatus" }
     SequenceStep:
       type: object
-      required: [id, campaignId, stepOrder, channel, delayDays, template]
+      required: [id, campaignId, stepOrder, channel, delayDays, delayHours, template]
       properties:
         id: { type: integer }
         campaignId: { type: integer }
         stepOrder: { type: integer }
         channel: { $ref: "#/components/schemas/Channel" }
         delayDays: { type: integer }
+        delayHours: { type: integer, description: "Extra hours to wait on top of delayDays" }
         subject: { type: ["string", "null"] }
         template: { type: string, description: "Message template or call objective. Supports {{firstName}}, {{company}}, {{title}}" }
     SequenceStepInput:
@@ -1227,6 +1228,7 @@ components:
       properties:
         channel: { $ref: "#/components/schemas/Channel" }
         delayDays: { type: integer }
+        delayHours: { type: integer, description: "Extra hours to wait on top of delayDays" }
         subject: { type: string }
         template: { type: string }
     SequenceStepUpdate:
@@ -1234,6 +1236,7 @@ components:
       properties:
         channel: { $ref: "#/components/schemas/Channel" }
         delayDays: { type: integer }
+        delayHours: { type: integer, description: "Extra hours to wait on top of delayDays" }
         subject: { type: string }
         template: { type: string }
         stepOrder: { type: integer }

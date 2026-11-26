@@ -13,6 +13,8 @@ export interface SequenceStep {
   stepOrder: number;
   channel: Channel;
   delayDays: number;
+  /** Extra hours to wait on top of delayDays */
+  delayHours: number;
   /** @nullable */
   subject?: string | null;
   /** Message template or call objective. Supports {{firstName}}, {{company}}, {{title}} */

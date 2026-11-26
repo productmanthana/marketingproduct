@@ -29,6 +29,7 @@ export const sequenceStepsTable = pgTable("sequence_steps", {
   stepOrder: integer("step_order").notNull(),
   channel: text("channel").notNull(),
   delayDays: integer("delay_days").notNull().default(0),
+  delayHours: integer("delay_hours").notNull().default(0),
   subject: text("subject"),
   template: text("template").notNull(),
 });

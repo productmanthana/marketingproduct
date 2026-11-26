@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { WaitPicker } from "@/components/wait-picker";
 import { PageHeader, Panel, Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, useRefreshAll, CH, chColor, TONE_OPTIONS, ago, errMsg, type Ch } from "@/components/bits";
 
 const STATE_LABEL: Record<string, string> = { draft: "Not started", active: "Sending", paused: "Paused", completed: "Finished" };
@@ -157,9 +158,9 @@ export default function CampaignDetail() {
           ) : (
             <ol className="relative p-4">
               {steps.length > 1 && <li className="mb-4 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground" data-testid="text-followup-explainer">
-                Each person gets message 1 first. <b className="text-foreground">If they don't reply</b>, the next one goes out a few days later, sometimes on a different channel (email, LinkedIn or a phone call) so they have more chances to see it. As soon as they reply, the rest stop.
+                Each person gets message 1 first. <b className="text-foreground">If they don't reply</b>, the next one goes out after the wait you choose on each message (from 1 hour to 2 weeks), sometimes on a different channel so they have more chances to see it. As soon as they reply, the rest stop.
               </li>}
-              {steps.map((s, i) => <StepRow key={s.id} s={s} i={i} day={1 + steps.slice(1, i + 1).reduce((d, x) => d + x.delayDays, 0)} last={i === steps.length - 1} campaignId={id} prev={steps[i - 1]} next={steps[i + 1]} onEdit={() => setStepEdit(s)} onPreview={() => setPreview(s)} />)}
+              {steps.map((s, i) => <StepRow key={s.id} s={s} i={i} last={i === steps.length - 1} campaignId={id} prev={steps[i - 1]} next={steps[i + 1]} onEdit={() => setStepEdit(s)} onPreview={() => setPreview(s)} />)}
             </ol>
           )}
           <WizardNav onBack={() => go(1)} onNext={() => go(3)} nextDisabled={!steps.length} hint={!steps.length ? "Add at least one message to continue." : null} />
@@ -285,7 +286,7 @@ function SettingsForm({ c, onSave, saving }: { c: CampaignLike; onSave: (d: { na
 
 const ROW_LABEL: Record<Ch, string> = { email: "Email", linkedin: "LinkedIn message", call: "Phone call" };
 
-function StepRow({ s, i, day, last, campaignId, prev, next, onEdit, onPreview }: { s: SequenceStep; i: number; day: number; last: boolean; campaignId: number; prev?: SequenceStep; next?: SequenceStep; onEdit: () => void; onPreview: () => void }) {
+function StepRow({ s, i, last, campaignId, prev, next, onEdit, onPreview }: { s: SequenceStep; i: number; last: boolean; campaignId: number; prev?: SequenceStep; next?: SequenceStep; onEdit: () => void; onPreview: () => void }) {
   const upd = useUpdateSequenceStep();
   const del = useDeleteSequenceStep();
   const refresh = useRefreshAll();
@@ -303,8 +304,15 @@ function StepRow({ s, i, day, last, campaignId, prev, next, onEdit, onPreview }:
       <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white" style={{ background: chColor(ch) }}><I className="h-4 w-4" /></div>
       <div className="group min-w-0 flex-1 rounded-lg border border-border bg-background/60 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold" style={{ color: chColor(ch) }}>Day {day}: {ROW_LABEL[ch]}</span>
-          <span className="text-xs text-muted-foreground">{i === 0 ? "sent right away when you start" : "only if they haven't replied yet"}{ch === "call" && " · added to your call list"}</span>
+          <span className="text-sm font-semibold" style={{ color: chColor(ch) }}>{i + 1}. {ROW_LABEL[ch]}</span>
+          {i === 0 ? <span className="text-xs text-muted-foreground">sent right away when you start{ch === "call" && " · added to your call list"}</span> : (
+            <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              Wait
+              <WaitPicker value={s} disabled={upd.isPending} className="h-7 text-xs text-foreground" testId={`select-step-wait-${s.id}`}
+                onChange={(w) => upd.mutate({ id: campaignId, stepId: s.id, data: w }, { onSuccess: refresh })} />
+              after the previous message, only if they haven't replied{ch === "call" && " · added to your call list"}
+            </span>
+          )}
           <div className="ml-auto flex gap-0.5 opacity-60 group-hover:opacity-100">
             <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!prev || upd.isPending} onClick={() => swap(prev)} data-testid={`button-step-up-${s.id}`}><ArrowUp className="h-3.5 w-3.5" /></Button>
             <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!next || upd.isPending} onClick={() => swap(next)} data-testid={`button-step-down-${s.id}`}><ArrowDown className="h-3.5 w-3.5" /></Button>
@@ -324,10 +332,10 @@ function StepDialog({ campaignId, step, onClose }: { campaignId: number; step: S
   const add = useAddSequenceStep();
   const upd = useUpdateSequenceStep();
   const refresh = useRefreshAll();
-  const [f, setF] = useState({ channel: (step?.channel ?? "email") as Ch, delayDays: String(step?.delayDays ?? 3), subject: step?.subject ?? "", template: step?.template ?? "" });
+  const [f, setF] = useState({ channel: (step?.channel ?? "email") as Ch, wait: { delayDays: step?.delayDays ?? 1, delayHours: step?.delayHours ?? 0 }, subject: step?.subject ?? "", template: step?.template ?? "" });
   const pending = add.isPending || upd.isPending;
   const save = () => {
-    const data = { channel: f.channel, delayDays: Number(f.delayDays) || 0, subject: f.channel === "email" ? f.subject : undefined, template: f.template };
+    const data = { channel: f.channel, ...f.wait, subject: f.channel === "email" ? f.subject : undefined, template: f.template };
     const done = { onSuccess: () => { refresh(); onClose(); } };
     if (step) upd.mutate({ id: campaignId, stepId: step.id, data }, done); else add.mutate({ id: campaignId, data }, done);
   };
@@ -344,7 +352,8 @@ function StepDialog({ campaignId, step, onClose }: { campaignId: number; step: S
                 style={on ? { borderColor: chColor(k), background: chColor(k, 0.1), color: chColor(k) } : {}}><I className="h-4 w-4" />{CH[k].label}</button>;
             })}
           </div>
-          <div><Label className="text-xs">How many days after the previous message? (the first message always goes right away)</Label><Input type="number" min={0} value={f.delayDays} onChange={(e) => setF({ ...f, delayDays: e.target.value })} data-testid="input-step-delay" /></div>
+          <div><Label className="text-xs">How long to wait after the previous message? (the first message always goes right away)</Label>
+            <WaitPicker value={f.wait} onChange={(w) => setF({ ...f, wait: w })} className="h-9 w-full" testId="input-step-delay" /></div>
           {f.channel === "email" && <div><Label className="text-xs">Subject</Label><Input value={f.subject} onChange={(e) => setF({ ...f, subject: e.target.value })} data-testid="input-step-subject" /></div>}
           <div><Label className="text-xs">{f.channel === "call" ? "What should this call achieve?" : "Message"}</Label>
             <Textarea rows={7} value={f.template} onChange={(e) => setF({ ...f, template: e.target.value })} placeholder="Hi {{firstName}}, noticed {{company}}..." data-testid="input-step-template" />

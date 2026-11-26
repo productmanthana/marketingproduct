@@ -482,6 +482,7 @@ export const GetCampaignResponse = zod.object({
   "stepOrder": zod.int(),
   "channel": zod.enum(['email', 'linkedin', 'call']),
   "delayDays": zod.int(),
+  "delayHours": zod.int().describe('Extra hours to wait on top of delayDays'),
   "subject": zod.string().nullish(),
   "template": zod.string().describe('Message template or call objective. Supports {{firstName}}, {{company}}, {{title}}')
 })),
@@ -563,6 +564,7 @@ export const AddSequenceStepParams = zod.object({
 export const AddSequenceStepBody = zod.object({
   "channel": zod.enum(['email', 'linkedin', 'call']),
   "delayDays": zod.int().optional(),
+  "delayHours": zod.int().optional().describe('Extra hours to wait on top of delayDays'),
   "subject": zod.string().optional(),
   "template": zod.string()
 })
@@ -573,6 +575,7 @@ export const AddSequenceStepResponse = zod.object({
   "stepOrder": zod.int(),
   "channel": zod.enum(['email', 'linkedin', 'call']),
   "delayDays": zod.int(),
+  "delayHours": zod.int().describe('Extra hours to wait on top of delayDays'),
   "subject": zod.string().nullish(),
   "template": zod.string().describe('Message template or call objective. Supports {{firstName}}, {{company}}, {{title}}')
 })
@@ -586,6 +589,7 @@ export const UpdateSequenceStepParams = zod.object({
 export const UpdateSequenceStepBody = zod.object({
   "channel": zod.enum(['email', 'linkedin', 'call']).optional(),
   "delayDays": zod.int().optional(),
+  "delayHours": zod.int().optional().describe('Extra hours to wait on top of delayDays'),
   "subject": zod.string().optional(),
   "template": zod.string().optional(),
   "stepOrder": zod.int().optional()
@@ -597,6 +601,7 @@ export const UpdateSequenceStepResponse = zod.object({
   "stepOrder": zod.int(),
   "channel": zod.enum(['email', 'linkedin', 'call']),
   "delayDays": zod.int(),
+  "delayHours": zod.int().describe('Extra hours to wait on top of delayDays'),
   "subject": zod.string().nullish(),
   "template": zod.string().describe('Message template or call objective. Supports {{firstName}}, {{company}}, {{title}}')
 })
@@ -690,6 +695,7 @@ export const GenerateCampaignSequenceResponse = zod.object({
   "stepOrder": zod.int(),
   "channel": zod.enum(['email', 'linkedin', 'call']),
   "delayDays": zod.int(),
+  "delayHours": zod.int().describe('Extra hours to wait on top of delayDays'),
   "subject": zod.string().nullish(),
   "template": zod.string().describe('Message template or call objective. Supports {{firstName}}, {{company}}, {{title}}')
 })),

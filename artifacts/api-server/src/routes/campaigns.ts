@@ -132,6 +132,7 @@ router.post("/campaigns/:id/steps", async (req, res): Promise<void> => {
       stepOrder: (maxOrder ?? 0) + 1,
       channel: parsed.data.channel,
       delayDays: parsed.data.delayDays ?? 0,
+      delayHours: parsed.data.delayHours ?? 0,
       subject: parsed.data.subject ?? null,
       template: parsed.data.template,
     })
