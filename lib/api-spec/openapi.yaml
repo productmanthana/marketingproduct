@@ -91,6 +91,49 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/QualifyResult" }
+  /prospects/status:
+    get:
+      operationId: getProspectStatus
+      tags: [prospects]
+      summary: Whether the Apollo lead database is connected
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectStatus" }
+  /prospects/search:
+    post:
+      operationId: searchProspects
+      tags: [prospects]
+      summary: Search Apollo for people by sector, title, company size and location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectSearchInput" }
+      responses:
+        "200":
+          description: Matching people
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectSearchResult" }
+  /prospects/import:
+    post:
+      operationId: importProspects
+      tags: [prospects]
+      summary: Reveal contact details for chosen Apollo people and add them as leads
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectImportInput" }
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectImportResult" }
   /leads/{id}/enrich:
     parameters:
       - { name: id, in: path, required: true, schema: { type: integer } }
@@ -749,8 +792,58 @@ components:
         website: { type: ["string", "null"] }
         fitScore: { type: ["integer", "null"], description: "0-100 AI fit against the ideal customer profile" }
         fitReason: { type: ["string", "null"] }
+        companySize: { type: ["string", "null"], description: "Approximate employee count" }
+        companyLocation: { type: ["string", "null"] }
+        companyLinkedinUrl: { type: ["string", "null"] }
         lastContactedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
+    ProspectStatus:
+      type: object
+      required: [configured]
+      properties:
+        configured: { type: boolean }
+    ProspectSearchInput:
+      type: object
+      properties:
+        titles: { type: array, items: { type: string } }
+        industries: { type: array, items: { type: string }, description: "Sector / industry keywords" }
+        locations: { type: array, items: { type: string } }
+        employeeRanges: { type: array, items: { type: string }, description: "e.g. 1,10 or 51,200" }
+        keywords: { type: string }
+        page: { type: integer, minimum: 1 }
+    Prospect:
+      type: object
+      required: [apolloId, firstName, lastName, hasEmail, alreadyImported]
+      properties:
+        apolloId: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        title: { type: ["string", "null"] }
+        company: { type: ["string", "null"] }
+        location: { type: ["string", "null"] }
+        linkedinUrl: { type: ["string", "null"] }
+        hasEmail: { type: boolean }
+        alreadyImported: { type: boolean }
+    ProspectSearchResult:
+      type: object
+      required: [people, total, page, totalPages]
+      properties:
+        people: { type: array, items: { $ref: "#/components/schemas/Prospect" } }
+        total: { type: integer }
+        page: { type: integer }
+        totalPages: { type: integer }
+    ProspectImportInput:
+      type: object
+      required: [apolloIds]
+      properties:
+        apolloIds: { type: array, items: { type: string }, minItems: 1, maxItems: 50 }
+        campaignId: { type: integer }
+    ProspectImportResult:
+      type: object
+      required: [imported, skipped]
+      properties:
+        imported: { type: integer }
+        skipped: { type: integer }
     LeadDetail:
       allOf:
         - $ref: "#/components/schemas/Lead"

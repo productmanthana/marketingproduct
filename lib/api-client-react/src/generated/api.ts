@@ -61,6 +61,11 @@ import type {
   MailboxUpdate,
   Message,
   MessageInput,
+  ProspectImportInput,
+  ProspectImportResult,
+  ProspectSearchInput,
+  ProspectSearchResult,
+  ProspectStatus,
   QualifyLeadsInput,
   QualifyResult,
   RunResult,
@@ -564,6 +569,283 @@ export const useQualifyLeads = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getQualifyLeadsMutationOptions(options), queryClient);
+    }
+
+export const getGetProspectStatusUrl = () => {
+
+
+
+
+  return `/api/prospects/status`
+}
+
+/**
+ * @summary Whether the Apollo lead database is connected
+ */
+export const getProspectStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<ProspectStatus> => {
+
+  return customFetch<ProspectStatus>(getGetProspectStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProspectStatusQueryKey = () => {
+    return [
+    `/api/prospects/status`
+    ] as const;
+    }
+
+
+export const getGetProspectStatusQueryOptions = <TData = Awaited<ReturnType<typeof getProspectStatus>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProspectStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProspectStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProspectStatus>>> = ({ signal }) => getProspectStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProspectStatus>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetProspectStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getProspectStatus>>>
+export type GetProspectStatusQueryError = ErrorType<unknown>
+
+
+export function useGetProspectStatus<TData = Awaited<ReturnType<typeof getProspectStatus>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProspectStatus>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProspectStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getProspectStatus>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetProspectStatus<TData = Awaited<ReturnType<typeof getProspectStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProspectStatus>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProspectStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getProspectStatus>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetProspectStatus<TData = Awaited<ReturnType<typeof getProspectStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProspectStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Whether the Apollo lead database is connected
+ */
+
+export function useGetProspectStatus<TData = Awaited<ReturnType<typeof getProspectStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProspectStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetProspectStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSearchProspectsUrl = () => {
+
+
+
+
+  return `/api/prospects/search`
+}
+
+/**
+ * @summary Search Apollo for people by sector, title, company size and location
+ */
+export const searchProspects = async (prospectSearchInput: ProspectSearchInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectSearchResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectSearchResult>(getSearchProspectsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(prospectSearchInput)
+  }
+);}
+
+
+
+
+
+export const getSearchProspectsMutationKey = () => ['searchProspects'] as const;
+
+export const getSearchProspectsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchProspects>>, TError,SearchProspectsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof searchProspects>>, TError,SearchProspectsMutationVariables, TContext> => {
+
+const mutationKey = getSearchProspectsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof searchProspects>>, SearchProspectsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  searchProspects(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SearchProspectsMutationResult = NonNullable<Awaited<ReturnType<typeof searchProspects>>>
+    export type SearchProspectsMutationBody = BodyType<ProspectSearchInput>
+    export type SearchProspectsMutationError = ErrorType<unknown>
+    export type SearchProspectsMutationVariables = {data: BodyType<ProspectSearchInput>}
+
+    /**
+ * @summary Search Apollo for people by sector, title, company size and location
+ */
+export const useSearchProspects = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof searchProspects>>, TError,SearchProspectsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof searchProspects>>,
+        TError,
+        SearchProspectsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSearchProspectsMutationOptions(options), queryClient);
+    }
+
+export const getImportProspectsUrl = () => {
+
+
+
+
+  return `/api/prospects/import`
+}
+
+/**
+ * @summary Reveal contact details for chosen Apollo people and add them as leads
+ */
+export const importProspects = async (prospectImportInput: ProspectImportInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectImportResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectImportResult>(getImportProspectsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(prospectImportInput)
+  }
+);}
+
+
+
+
+
+export const getImportProspectsMutationKey = () => ['importProspects'] as const;
+
+export const getImportProspectsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importProspects>>, TError,ImportProspectsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importProspects>>, TError,ImportProspectsMutationVariables, TContext> => {
+
+const mutationKey = getImportProspectsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importProspects>>, ImportProspectsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  importProspects(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportProspectsMutationResult = NonNullable<Awaited<ReturnType<typeof importProspects>>>
+    export type ImportProspectsMutationBody = BodyType<ProspectImportInput>
+    export type ImportProspectsMutationError = ErrorType<unknown>
+    export type ImportProspectsMutationVariables = {data: BodyType<ProspectImportInput>}
+
+    /**
+ * @summary Reveal contact details for chosen Apollo people and add them as leads
+ */
+export const useImportProspects = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importProspects>>, TError,ImportProspectsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof importProspects>>,
+        TError,
+        ImportProspectsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getImportProspectsMutationOptions(options), queryClient);
     }
 
 export const getEnrichLeadUrl = (id: number,) => {

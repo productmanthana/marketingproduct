@@ -57,7 +57,7 @@ export default function LeadDetail() {
         <Button variant="outline" size="icon" onClick={() => setConfirm(true)} data-testid="button-delete-lead"><Trash2 className="h-4 w-4" /></Button>
       </div>
 
-      {enrich.isPending && <div className="mt-4"><AiWorking text="Reading the company website and pulling out personalization hooks" /></div>}
+      {enrich.isPending && <div className="mt-4"><AiWorking text="Looking up company details and reading the website for personalization hooks" /></div>}
       <div className="mt-5 grid gap-5 lg:grid-cols-[320px_1fr]">
         <div className="space-y-5">
           <Panel title="Profile">
@@ -71,6 +71,14 @@ export default function LeadDetail() {
                 <Input className="h-8" placeholder="company.com" value={website ?? l.website ?? ""} onChange={(e) => setWebsite(e.target.value)} data-testid="input-lead-website" />
                 {website !== null && <Button size="sm" variant="outline" className="h-8" disabled={upd.isPending} data-testid="button-save-website"
                   onClick={() => upd.mutate({ id, data: { website } }, { onSuccess: () => { setWebsite(null); refresh(); } })}>Save</Button>}</div>
+              {(l.companySize || l.companyLocation || l.companyLinkedinUrl) && (
+                <div className="space-y-1 px-4 py-2.5 text-xs" data-testid="block-company-details">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Company</div>
+                  {l.companySize && <div data-testid="text-company-size">{l.companySize}</div>}
+                  {l.companyLocation && <div className="text-muted-foreground" data-testid="text-company-location">{l.companyLocation}</div>}
+                  {l.companyLinkedinUrl && <a href={l.companyLinkedinUrl} target="_blank" rel="noreferrer" className="block truncate text-primary hover:underline" data-testid="link-company-linkedin">Company LinkedIn page</a>}
+                </div>
+              )}
               <div className="flex items-center justify-between gap-2 px-4 py-2.5"><span className="text-muted-foreground">ICP fit</span>
                 <span className="flex items-center gap-2"><FitBadge score={l.fitScore} reason={l.fitReason} />
                   <button className="text-xs text-primary hover:underline disabled:opacity-50" disabled={qualify.isPending} data-testid="button-score-lead"

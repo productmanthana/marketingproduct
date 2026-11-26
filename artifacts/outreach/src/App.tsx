@@ -10,6 +10,7 @@ import Dashboard from '@/pages/dashboard';
 import Campaigns from '@/pages/campaigns';
 import CampaignDetail from '@/pages/campaign-detail';
 import Leads from '@/pages/leads';
+import FindLeads from '@/pages/find-leads';
 import LeadDetail from '@/pages/lead-detail';
 import Inbox from '@/pages/inbox';
 import Calls from '@/pages/calls';
@@ -26,6 +27,7 @@ function Router() {
           <Route path="/" component={Dashboard} />
           <Route path="/campaigns" component={Campaigns} />
           <Route path="/campaigns/:id" component={CampaignDetail} />
+          <Route path="/find-leads" component={FindLeads} />
           <Route path="/leads" component={Leads} />
           <Route path="/leads/:id" component={LeadDetail} />
           <Route path="/inbox" component={Inbox} />

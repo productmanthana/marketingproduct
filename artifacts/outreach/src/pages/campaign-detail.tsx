@@ -1,6 +1,7 @@
+import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
-import { ArrowDown, ArrowUp, ChevronLeft, Eye, Pencil, Plus, Rocket, Sparkles, Trash2, UserPlus, Users, Workflow } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronLeft, Pause, Play, Eye, Pencil, Plus, Rocket, RotateCcw, Sparkles, Trash2, UserPlus, Users, Workflow } from "lucide-react";
 import {
   useGetCampaign, useUpdateCampaign, useDeleteCampaign, useAddSequenceStep, useUpdateSequenceStep, useDeleteSequenceStep,
   useEnrollLeads, useGenerateCampaignSequence, useRunCampaign, useListLeads, usePreviewSequenceStep,
@@ -17,7 +18,23 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader, Panel, Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, useRefreshAll, CH, chColor, TONE_OPTIONS, ago, errMsg, type Ch } from "@/components/bits";
 
-const STATUSES = ["draft", "active", "paused", "completed"] as const;
+const STATE_LABEL: Record<string, string> = { draft: "Not started", active: "Sending", paused: "Paused", completed: "Finished" };
+
+function FlowSection({ n, title, hint, done, action, children }: { n: number; title: string; hint: string; done: boolean; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section id={`step-${n}`} className="rise scroll-mt-4 rounded-xl border border-card-border bg-card shadow-[0_8px_24px_-16px_hsl(228_40%_12%/.25)]" data-testid={`section-step-${n}`}>
+      <div className="flex flex-wrap items-start gap-3 border-b border-border p-4">
+        <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full font-display text-sm font-bold ${done ? "bg-[hsl(var(--ch-linkedin))] text-white" : "bg-primary text-primary-foreground"}`}>{done ? <Check className="h-4 w-4" /> : n}</span>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-display text-lg font-bold leading-tight">{title}</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">{hint}</p>
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export default function CampaignDetail() {
   const id = Number(useParams().id);
@@ -29,6 +46,7 @@ export default function CampaignDetail() {
   const del = useDeleteCampaign();
   const gen = useGenerateCampaignSequence();
   const run = useRunCampaign();
+  const restart = useEnrollLeads();
   const [result, setResult] = useState<RunResult | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [stepEdit, setStepEdit] = useState<SequenceStep | "new" | null>(null);
@@ -43,75 +61,139 @@ export default function CampaignDetail() {
     update.mutate({ id, data }, { onSuccess: () => { refresh(); toast({ title: msg }); } });
 
   const steps = [...c.steps].sort((a, b) => a.stepOrder - b.stepOrder);
+  const offerDone = (c.productPitch ?? "").trim().length >= 20;
+  const started = c.status !== "draft" || c.sentCount > 0;
+  const flow = [
+    { n: 1, label: "Your offer", done: offerDone },
+    { n: 2, label: "Your messages", done: steps.length > 0 },
+    { n: 3, label: "Who gets them", done: c.leads.length > 0 },
+    { n: 4, label: "Start sending", done: started },
+  ];
+  const missing = !offerDone ? "Finish step 1: describe what you're offering." : !steps.length ? "Finish step 2: add at least one message." : !c.leads.length ? "Finish step 3: add the people who should receive it." : null;
+  const firstCh = steps[0]?.channel as Ch | undefined;
+  const runIt = () => run.mutate({ id }, {
+    onSuccess: (r) => { setResult(r); refresh(); toast({ title: r.messagesSent || r.callsScheduled ? "Sent!" : "Nothing new to send right now", description: `${r.messagesSent} messages sent, ${r.callsScheduled} calls added to your call list` }); },
+    onError: (e) => toast({ title: "Could not send", description: errMsg(e), variant: "destructive" }),
+  });
 
   return (
     <div>
-      <div className="px-6 pt-5 md:px-8"><Link href="/campaigns" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" data-testid="link-back-campaigns"><ChevronLeft className="h-3 w-3" />Campaigns</Link></div>
-      <PageHeader eyebrow={`Campaign #${c.id} · created ${ago(c.createdAt)}`} title={<span className="flex items-center gap-3">{c.name}<Pill value={c.status} /></span>}>
-        <select className="h-9 rounded-md border border-input bg-card px-2 text-sm capitalize" value={c.status} onChange={(e) => patch({ status: e.target.value as typeof STATUSES[number] }, "Status updated")} data-testid="select-campaign-status">
-          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <Button variant="outline" size="icon" onClick={() => setConfirmDel(true)} data-testid="button-delete-campaign"><Trash2 className="h-4 w-4" /></Button>
-        <Button disabled={run.isPending || !steps.length || !c.leadCount} data-testid="button-run-campaign"
-          onClick={() => run.mutate({ id }, { onSuccess: (r) => { setResult(r); refresh(); toast({ title: "Campaign run complete", description: `${r.messagesSent} messages, ${r.callsScheduled} calls` }); }, onError: () => toast({ title: "Run failed", variant: "destructive" }) })}>
-          <Rocket className={`mr-1.5 h-4 w-4 ${run.isPending ? "animate-bounce" : ""}`} />{run.isPending ? "Running..." : "Run campaign"}
-        </Button>
+      <div className="px-6 pt-5 md:px-8"><Link href="/campaigns" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" data-testid="link-back-campaigns"><ChevronLeft className="h-3 w-3" />All campaigns</Link></div>
+      <PageHeader eyebrow="Campaign" title={<span className="flex items-center gap-3">{c.name}<span className="rounded-full border border-border px-2.5 py-0.5 font-sans text-xs font-medium text-muted-foreground" data-testid="text-campaign-state">{STATE_LABEL[c.status] ?? c.status}</span></span>}>
+        {c.status === "active" && <Button variant="outline" onClick={() => patch({ status: "paused" }, "Campaign paused. Nothing more will be sent until you resume.")} data-testid="button-pause-campaign"><Pause className="mr-1 h-4 w-4" />Pause</Button>}
+        {c.status === "paused" && <Button variant="outline" onClick={() => patch({ status: "active" }, "Campaign resumed")} data-testid="button-resume-campaign"><Play className="mr-1 h-4 w-4" />Resume</Button>}
+        <Button variant="outline" size="icon" title="Delete campaign" onClick={() => setConfirmDel(true)} data-testid="button-delete-campaign"><Trash2 className="h-4 w-4" /></Button>
       </PageHeader>
 
-      <div className="space-y-5 p-6 md:p-8">
-        {run.isPending && <AiWorking text="Personalizing and sending the next step for every enrolled lead" />}
-        {result && !run.isPending && (
-          <div className="pop grid grid-cols-3 overflow-hidden rounded-xl bg-foreground text-background" data-testid="panel-run-result">
-            {([["Leads processed", result.leadsProcessed], ["Messages sent", result.messagesSent], ["Calls scheduled", result.callsScheduled]] as const).map(([k, v], i) => (
-              <div key={k} className="border-r border-background/10 p-4 last:border-0">
-                <div className="font-mono text-[10px] uppercase tracking-[0.16em] opacity-60">{k}</div>
-                <div className={`font-display mt-1 text-3xl font-bold tnum ${i === 1 ? "text-primary" : ""}`}>{v}</div>
-              </div>
+      <div className="mx-auto max-w-4xl space-y-5 p-6 md:p-8">
+        <ol className="grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="flow-progress">
+          {flow.map((f) => (
+            <li key={f.n}>
+              <a href={`#step-${f.n}`} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${f.done ? "border-[hsl(var(--ch-linkedin)/.4)] bg-[hsl(var(--ch-linkedin)/.08)]" : "border-border bg-card hover:border-primary/40"}`}>
+                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold ${f.done ? "bg-[hsl(var(--ch-linkedin))] text-white" : "bg-muted text-muted-foreground"}`}>{f.done ? <Check className="h-3.5 w-3.5" /> : f.n}</span>
+                <span className={f.done ? "font-medium" : "text-muted-foreground"}>{f.label}</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+
+        {started && (
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-card-border bg-border md:grid-cols-4">
+            {([["People", c.leadCount], ["Messages sent", c.sentCount], ["Replies", c.replyCount], ["Meetings booked", c.meetingCount]] as const).map(([k, v]) => (
+              <div key={k} className="bg-card p-4"><div className="text-xs text-muted-foreground">{k}</div><div className="font-display text-2xl font-bold tnum">{v}</div></div>
             ))}
           </div>
         )}
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-card-border bg-border md:grid-cols-4">
-          {([["Leads", c.leadCount], ["Sent", c.sentCount], ["Replies", c.replyCount], ["Meetings", c.meetingCount]] as const).map(([k, v]) => (
-            <div key={k} className="bg-card p-4"><div className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{k}</div><div className="font-display text-2xl font-bold tnum">{v}</div></div>
-          ))}
-        </div>
 
-        <div className="grid gap-5 xl:grid-cols-[380px_1fr]">
-          <Panel title="Settings"><SettingsForm c={c} onSave={(d) => patch(d)} saving={update.isPending} /></Panel>
+        <FlowSection n={1} title="What are you offering?" hint="Tell the AI what you sell and what you want people to do. It uses this to write every message and every reply." done={offerDone}>
+          <SettingsForm c={c} onSave={(d) => patch(d)} saving={update.isPending} />
+        </FlowSection>
 
-          <Panel title={`Sequence · ${steps.length} steps`} delay={80} action={
-            <div className="flex gap-1.5">
-              <Button size="sm" variant="outline" disabled={gen.isPending} data-testid="button-generate-sequence"
-                onClick={() => gen.mutate({ id }, { onSuccess: () => { refresh(); toast({ title: "Sequence generated" }); }, onError: () => toast({ title: "Generation failed", variant: "destructive" }) })}>
-                <Sparkles className="mr-1 h-3.5 w-3.5 text-primary" />{gen.isPending ? "Writing..." : "Generate with AI"}
-              </Button>
-              <Button size="sm" onClick={() => setStepEdit("new")} data-testid="button-add-step"><Plus className="mr-1 h-3.5 w-3.5" />Step</Button>
-            </div>}>
-            {gen.isPending && <div className="p-4"><AiWorking text="Drafting a multichannel sequence from your goal and pitch" /></div>}
-            {!steps.length && !gen.isPending ? (
-              <Empty icon={Workflow} title="No steps yet" body="Let the AI draft a sequence from your pitch, or add steps by hand." />
-            ) : (
-              <ol className="relative p-4">
-                {steps.map((s, i) => <StepRow key={s.id} s={s} i={i} last={i === steps.length - 1} campaignId={id} prev={steps[i - 1]} next={steps[i + 1]} onEdit={() => setStepEdit(s)} onPreview={() => setPreview(s)} />)}
-              </ol>
-            )}
-          </Panel>
-        </div>
+        <FlowSection n={2} title="Your messages" hint="The messages each person receives, in order. The AI personalises every one for the person it goes to. Follow-ups stop automatically as soon as someone replies." done={steps.length > 0}
+          action={steps.length > 0 && <div className="flex gap-1.5">
+            <Button size="sm" variant="outline" disabled={gen.isPending || !offerDone} title={!offerDone ? "Finish step 1 first" : undefined} data-testid="button-generate-sequence"
+              onClick={() => gen.mutate({ id }, { onSuccess: () => { refresh(); toast({ title: "Messages rewritten by AI" }); }, onError: () => toast({ title: "AI could not write the messages", variant: "destructive" }) })}>
+              <Sparkles className="mr-1 h-3.5 w-3.5 text-primary" />{gen.isPending ? "Writing..." : "Rewrite all with AI"}
+            </Button>
+            <Button size="sm" onClick={() => setStepEdit("new")} data-testid="button-add-step"><Plus className="mr-1 h-3.5 w-3.5" />Add message</Button>
+          </div>}>
+          {gen.isPending && <div className="p-4"><AiWorking text="Writing your messages from your offer" /></div>}
+          {!steps.length && !gen.isPending ? (
+            <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
+              <Workflow className="h-8 w-8 text-muted-foreground" />
+              <p className="max-w-md text-sm text-muted-foreground">{offerDone ? "Let the AI write a series of emails, LinkedIn messages and call reminders for you, or write your own." : "Finish step 1 first, then the AI can write your messages for you."}</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button disabled={!offerDone} data-testid="button-generate-sequence-empty"
+                  onClick={() => gen.mutate({ id }, { onSuccess: () => { refresh(); toast({ title: "Your messages are ready" }); }, onError: () => toast({ title: "AI could not write the messages", variant: "destructive" }) })}>
+                  <Sparkles className="mr-1 h-4 w-4" />Write them for me with AI</Button>
+                <Button variant="outline" onClick={() => setStepEdit("new")} data-testid="button-add-step-empty"><Pencil className="mr-1 h-4 w-4" />I'll write my own</Button>
+              </div>
+            </div>
+          ) : (
+            <ol className="relative p-4">
+              {steps.map((s, i) => <StepRow key={s.id} s={s} i={i} last={i === steps.length - 1} campaignId={id} prev={steps[i - 1]} next={steps[i + 1]} onEdit={() => setStepEdit(s)} onPreview={() => setPreview(s)} />)}
+            </ol>
+          )}
+        </FlowSection>
 
-        <Panel title={`Enrolled leads · ${c.leads.length}`} delay={140} action={<Button size="sm" variant="outline" onClick={() => setEnroll(true)} data-testid="button-enroll-leads"><UserPlus className="mr-1 h-3.5 w-3.5" />Enroll leads</Button>}>
-          {!c.leads.length ? <Empty icon={Users} title="Nobody enrolled" body="Enroll leads, then hit Run. Each lead moves through the sequence step by step." /> : (
+        <FlowSection n={3} title="Who should receive them?" hint="Pick people from your lead list. Need more people? Find them on the Find leads page or add them on the Leads page." done={c.leads.length > 0}
+          action={<Button size="sm" variant={c.leads.length ? "outline" : "default"} onClick={() => setEnroll(true)} data-testid="button-enroll-leads"><UserPlus className="mr-1 h-3.5 w-3.5" />Add people</Button>}>
+          {!c.leads.length ? (
+            <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
+              <Users className="h-8 w-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">No one added yet.</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button onClick={() => setEnroll(true)} data-testid="button-enroll-empty"><UserPlus className="mr-1 h-4 w-4" />Add people from my leads</Button>
+                <Link href="/find-leads" className="inline-flex h-9 items-center rounded-md border border-input px-3 text-sm hover:bg-muted" data-testid="link-find-leads">Find new people</Link>
+              </div>
+            </div>
+          ) : (
             <div className="divide-y divide-border">
               {c.leads.map((l, i) => (
                 <Link key={l.id} href={`/leads/${l.id}`} className="rise flex items-center gap-3 px-4 py-2.5 hover:bg-muted/40" style={{ animationDelay: `${i * 20}ms` }} data-testid={`link-enrolled-${l.id}`}>
                   <Initials name={`${l.firstName} ${l.lastName}`} />
-                  <div className="min-w-0 flex-1"><div className="text-sm font-medium">{l.firstName} {l.lastName}</div><div className="truncate text-xs text-muted-foreground">{l.title} {l.company && `at ${l.company}`}</div></div>
-                  <span className="font-mono text-[11px] text-muted-foreground">step {l.currentStep ?? 0}/{steps.length}</span>
+                  <div className="min-w-0 flex-1"><div className="text-sm font-medium">{l.firstName} {l.lastName}</div><div className="truncate text-xs text-muted-foreground">{[l.email, l.company].filter(Boolean).join(" · ")}</div></div>
+                  <span className="text-xs text-muted-foreground">{(l.currentStep ?? 0) === 0 ? "nothing sent yet" : `got ${Math.min(l.currentStep ?? 0, steps.length)} of ${steps.length} messages`}</span>
                   <Pill value={l.status} />
+                  {steps.length > 0 && (l.currentStep ?? 0) >= steps.length && (
+                    <Button size="sm" variant="outline" className="h-7" disabled={restart.isPending} data-testid={`button-restart-${l.id}`}
+                      title="Start this person again from message 1"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); restart.mutate({ id, data: { leadIds: [l.id] } }, { onSuccess: () => { refresh(); toast({ title: `${l.firstName} will get message 1 again`, description: "Press \"Send anything due now\" below to send it." }); } }); }}>
+                      <RotateCcw className="mr-1 h-3 w-3" />Send again
+                    </Button>
+                  )}
                 </Link>
               ))}
             </div>
           )}
-        </Panel>
+        </FlowSection>
+
+        <FlowSection n={4} title={started ? "Sending" : "Start sending"} hint={started ? "This campaign runs on its own: follow-ups go out on schedule and the AI answers replies. Check the Inbox to see conversations." : "Everything is checked. Nothing is sent until you press the button."} done={started}>
+          <div className="space-y-4 p-4">
+            {run.isPending && <AiWorking text="Personalising and sending messages" />}
+            {result && !run.isPending && (
+              <div className="pop rounded-lg bg-foreground p-4 text-sm text-background" data-testid="panel-run-result">
+                <b>{result.messagesSent}</b> message{result.messagesSent === 1 ? "" : "s"} sent and <b>{result.callsScheduled}</b> call{result.callsScheduled === 1 ? "" : "s"} added to your call list.
+                {!result.leadsProcessed && " Everyone has already received their latest message; the next follow-ups go out automatically on their scheduled day."}
+              </div>
+            )}
+            {missing ? (
+              <p className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground" data-testid="text-launch-missing">{missing}</p>
+            ) : !started && (
+              <p className="text-sm" data-testid="text-launch-summary">
+                When you press <b>Start sending</b>, <b>{c.leads.length} {c.leads.length === 1 ? "person" : "people"}</b> will get message 1{firstCh ? ` by ${CH[firstCh].label.toLowerCase()}` : ""} right away.
+                {steps.length > 1 && ` The other ${steps.length - 1} follow-up${steps.length > 2 ? "s go" : " goes"} out automatically on schedule.`}
+                {c.autoReply ? " When someone replies, the AI answers for you (anything negative waits for you in the Inbox)." : " Replies wait for you in the Inbox."}
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button size="lg" disabled={run.isPending || !!missing} onClick={runIt} data-testid="button-run-campaign">
+                <Rocket className={`mr-1.5 h-4 w-4 ${run.isPending ? "animate-bounce" : ""}`} />{run.isPending ? "Sending..." : started ? "Send anything due now" : "Start sending"}
+              </Button>
+              {started && <Link href="/inbox" className="inline-flex h-10 items-center rounded-md border border-input px-4 text-sm hover:bg-muted" data-testid="link-open-inbox">Open Inbox</Link>}
+            </div>
+          </div>
+        </FlowSection>
       </div>
 
       {stepEdit && <StepDialog campaignId={id} step={stepEdit === "new" ? null : stepEdit} onClose={() => setStepEdit(null)} />}
@@ -137,23 +219,22 @@ function SettingsForm({ c, onSave, saving }: { c: CampaignLike; onSave: (d: { na
   useEffect(() => { if (forId.current !== c.id) { forId.current = c.id; setF(init()); } }, [c.id]); // eslint-disable-line
   const set = (k: keyof typeof f, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
   return (
-    <div className="grid gap-3 p-4">
-      <div><Label className="text-xs">Name</Label><Input value={f.name} onChange={(e) => set("name", e.target.value)} data-testid="input-edit-name" /></div>
-      <div><Label className="text-xs">Description</Label><Input value={f.description} onChange={(e) => set("description", e.target.value)} data-testid="input-edit-description" /></div>
-      <div><Label className="text-xs">Goal</Label><Input value={f.goal} onChange={(e) => set("goal", e.target.value)} data-testid="input-edit-goal" /></div>
-      <div><Label className="text-xs">Product pitch</Label><Textarea rows={4} value={f.productPitch} onChange={(e) => set("productPitch", e.target.value)} data-testid="input-edit-pitch" /></div>
-      <div className="grid grid-cols-2 gap-2">
-        <div><Label className="text-xs">Tone</Label>
-          <select className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm" value={f.replyTone} onChange={(e) => set("replyTone", e.target.value)} data-testid="select-edit-tone">
-            {Array.from(new Set([...TONE_OPTIONS, f.replyTone])).map((t) => <option key={t}>{t}</option>)}
-          </select></div>
-        <div><Label className="text-xs">Meeting link</Label><Input value={f.meetingLink} onChange={(e) => set("meetingLink", e.target.value)} data-testid="input-edit-meeting" /></div>
-      </div>
-      <label className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
-        <span><b>AI auto-reply</b><span className="block text-xs text-muted-foreground">Answers inbound in context</span></span>
+    <div className="grid gap-4 p-4 md:grid-cols-2">
+      <div><Label>Campaign name <span className="font-normal text-muted-foreground">(only you see this)</span></Label><Input value={f.name} onChange={(e) => set("name", e.target.value)} data-testid="input-edit-name" /></div>
+      <div><Label>What do you want people to do?</Label><Input value={f.goal} onChange={(e) => set("goal", e.target.value)} placeholder="Book a 20 minute intro call" data-testid="input-edit-goal" /></div>
+      <div className="md:col-span-2"><Label>What do you sell, and who is it for?</Label>
+        <Textarea rows={4} value={f.productPitch} onChange={(e) => set("productPitch", e.target.value)} placeholder="Example: We help clinics fill empty appointment slots with an automated WhatsApp reminder service. Clinics using it see 30% fewer no-shows. Setup takes one day." data-testid="input-edit-pitch" />
+        <p className={`mt-1 text-xs ${f.productPitch.trim().length >= 20 ? "text-muted-foreground" : "text-amber-700"}`}>2–3 sentences. The more specific you are, the better the AI writes.</p></div>
+      <div><Label>How should messages sound?</Label>
+        <select className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm" value={f.replyTone} onChange={(e) => set("replyTone", e.target.value)} data-testid="select-edit-tone">
+          {Array.from(new Set([...TONE_OPTIONS, f.replyTone])).map((t) => <option key={t}>{t}</option>)}
+        </select></div>
+      <div><Label>Your booking link <span className="font-normal text-muted-foreground">(optional)</span></Label><Input value={f.meetingLink} onChange={(e) => set("meetingLink", e.target.value)} placeholder="calendly.com/you/20min" data-testid="input-edit-meeting" /></div>
+      <label className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm md:col-span-2">
+        <span><b>Let AI answer replies for me</b><span className="block text-xs text-muted-foreground">When someone replies, the AI writes and sends the answer. Negative replies always wait for you.</span></span>
         <Switch checked={f.autoReply} onCheckedChange={(v) => set("autoReply", v)} data-testid="switch-edit-autoreply" />
       </label>
-      <Button onClick={() => onSave(f)} disabled={saving} data-testid="button-save-campaign">{saving ? "Saving..." : "Save settings"}</Button>
+      <div className="md:col-span-2"><Button onClick={() => onSave(f)} disabled={saving} data-testid="button-save-campaign">{saving ? "Saving..." : "Save"}</Button></div>
     </div>
   );
 }
@@ -176,13 +257,13 @@ function StepRow({ s, i, last, campaignId, prev, next, onEdit, onPreview }: { s:
       <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white" style={{ background: chColor(ch) }}><I className="h-4 w-4" /></div>
       <div className="group min-w-0 flex-1 rounded-lg border border-border bg-background/60 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-[11px] text-muted-foreground">STEP {i + 1}</span>
+          <span className="text-sm font-semibold">Message {i + 1}</span>
           <ChannelTag channel={ch} />
-          <span className="font-mono text-[11px] text-muted-foreground">{s.delayDays === 0 ? "immediately" : `+${s.delayDays}d`}</span>
+          <span className="text-xs text-muted-foreground">{i === 0 ? "sent right away when you start" : s.delayDays === 0 ? "same day as the previous one" : `${s.delayDays} day${s.delayDays === 1 ? "" : "s"} after the previous one`}{ch === "call" && " · added to your call list"}</span>
           <div className="ml-auto flex gap-0.5 opacity-60 group-hover:opacity-100">
             <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!prev || upd.isPending} onClick={() => swap(prev)} data-testid={`button-step-up-${s.id}`}><ArrowUp className="h-3.5 w-3.5" /></Button>
             <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!next || upd.isPending} onClick={() => swap(next)} data-testid={`button-step-down-${s.id}`}><ArrowDown className="h-3.5 w-3.5" /></Button>
-            {s.channel !== "call" && <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onPreview} title="Preview with a real lead" data-testid={`button-step-preview-${s.id}`}><Eye className="h-3.5 w-3.5" /></Button>}
+            {s.channel !== "call" && <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onPreview} title="See how it looks for a real person" data-testid={`button-step-preview-${s.id}`}><Eye className="h-3.5 w-3.5" /></Button>}
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onEdit} data-testid={`button-step-edit-${s.id}`}><Pencil className="h-3.5 w-3.5" /></Button>
             <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-destructive" disabled={del.isPending} onClick={() => del.mutate({ id: campaignId, stepId: s.id }, { onSuccess: refresh })} data-testid={`button-step-delete-${s.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
           </div>
@@ -198,7 +279,7 @@ function StepDialog({ campaignId, step, onClose }: { campaignId: number; step: S
   const add = useAddSequenceStep();
   const upd = useUpdateSequenceStep();
   const refresh = useRefreshAll();
-  const [f, setF] = useState({ channel: (step?.channel ?? "email") as Ch, delayDays: String(step?.delayDays ?? 2), subject: step?.subject ?? "", template: step?.template ?? "" });
+  const [f, setF] = useState({ channel: (step?.channel ?? "email") as Ch, delayDays: String(step?.delayDays ?? 3), subject: step?.subject ?? "", template: step?.template ?? "" });
   const pending = add.isPending || upd.isPending;
   const save = () => {
     const data = { channel: f.channel, delayDays: Number(f.delayDays) || 0, subject: f.channel === "email" ? f.subject : undefined, template: f.template };
@@ -208,7 +289,7 @@ function StepDialog({ campaignId, step, onClose }: { campaignId: number; step: S
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle className="font-display text-xl">{step ? "Edit step" : "Add step"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="font-display text-xl">{step ? "Edit message" : "Add a message"}</DialogTitle></DialogHeader>
         <div className="grid gap-3">
           <div className="grid grid-cols-3 gap-2">
             {(Object.keys(CH) as Ch[]).map((k) => {
@@ -218,13 +299,13 @@ function StepDialog({ campaignId, step, onClose }: { campaignId: number; step: S
                 style={on ? { borderColor: chColor(k), background: chColor(k, 0.1), color: chColor(k) } : {}}><I className="h-4 w-4" />{CH[k].label}</button>;
             })}
           </div>
-          <div><Label className="text-xs">Wait (days after previous step)</Label><Input type="number" min={0} value={f.delayDays} onChange={(e) => setF({ ...f, delayDays: e.target.value })} data-testid="input-step-delay" /></div>
+          <div><Label className="text-xs">How many days after the previous message? (the first message always goes right away)</Label><Input type="number" min={0} value={f.delayDays} onChange={(e) => setF({ ...f, delayDays: e.target.value })} data-testid="input-step-delay" /></div>
           {f.channel === "email" && <div><Label className="text-xs">Subject</Label><Input value={f.subject} onChange={(e) => setF({ ...f, subject: e.target.value })} data-testid="input-step-subject" /></div>}
-          <div><Label className="text-xs">{f.channel === "call" ? "Call objective" : "Message template"}</Label>
+          <div><Label className="text-xs">{f.channel === "call" ? "What should this call achieve?" : "Message"}</Label>
             <Textarea rows={7} value={f.template} onChange={(e) => setF({ ...f, template: e.target.value })} placeholder="Hi {{firstName}}, noticed {{company}}..." data-testid="input-step-template" />
-            <p className="mt-1 font-mono text-[10px] text-muted-foreground">{"{{firstName}} {{company}} {{title}}"}</p></div>
+            <p className="mt-1 text-xs text-muted-foreground">{"Write it roughly; the AI polishes and personalises it for each person. Tip: {{firstName}} and {{company}} are replaced with their name and company."}</p></div>
         </div>
-        <DialogFooter><Button onClick={save} disabled={!f.template.trim() || pending} data-testid="button-save-step">{pending ? "Saving..." : "Save step"}</Button></DialogFooter>
+        <DialogFooter><Button onClick={save} disabled={!f.template.trim() || pending} data-testid="button-save-step">{pending ? "Saving..." : "Save message"}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -245,9 +326,9 @@ function PreviewDialog({ campaignId, step, leads, onClose }: { campaignId: numbe
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle className="font-display text-xl">Preview step {step.stepOrder} with a real lead</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="font-display text-xl">See message {step.stepOrder} as a real person would</DialogTitle></DialogHeader>
         <select className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm" value={leadId} onChange={(e) => go(e.target.value)} data-testid="select-preview-lead">
-          <option value="">{pool.length ? "Choose a lead" : "Add leads first"}</option>
+          <option value="">{pool.length ? "Choose a person" : "Add people first"}</option>
           {pool.map((l) => <option key={l.id} value={l.id}>{l.firstName} {l.lastName}{l.company ? ` (${l.company})` : ""}</option>)}
         </select>
         {run.isPending && <AiWorking text="Personalizing this step the way it will be sent" />}
@@ -275,22 +356,22 @@ function EnrollDialog({ campaignId, enrolled, onClose }: { campaignId: number; e
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle className="font-display text-xl">Enroll leads</DialogTitle></DialogHeader>
-        <Input placeholder="Search leads" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-enroll-search" />
+        <DialogHeader><DialogTitle className="font-display text-xl">Add people to this campaign</DialogTitle></DialogHeader>
+        <Input placeholder="Search by name, company or email" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-enroll-search" />
         <div className="max-h-80 overflow-y-auto rounded-lg border border-border">
-          {q.isLoading ? <Rows n={4} h={36} /> : !avail.length ? <p className="p-6 text-center text-sm text-muted-foreground">No available leads.</p> : avail.map((l) => (
+          {q.isLoading ? <Rows n={4} h={36} /> : !avail.length ? <p className="p-6 text-center text-sm text-muted-foreground">No one left to add. Find new people on the Find leads page.</p> : avail.map((l) => (
             <label key={l.id} className="flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-muted/40" data-testid={`row-enroll-${l.id}`}>
               <Checkbox checked={sel.includes(l.id)} onCheckedChange={(v) => setSel((s) => v ? [...s, l.id] : s.filter((x) => x !== l.id))} />
               <span className="flex-1 text-sm">{l.firstName} {l.lastName}<span className="ml-2 text-xs text-muted-foreground">{l.company}</span></span>
-              {l.campaignName && <span className="text-[10px] text-muted-foreground">in {l.campaignName}</span>}
+              {l.campaignName && <span className="text-[10px] text-muted-foreground">moves from {l.campaignName}</span>}
             </label>
           ))}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setSel(avail.map((l) => l.id))} data-testid="button-select-all">Select all</Button>
           <Button disabled={!sel.length || enroll.isPending} data-testid="button-confirm-enroll"
-            onClick={() => enroll.mutate({ id: campaignId, data: { leadIds: sel } }, { onSuccess: () => { refresh(); toast({ title: `${sel.length} leads enrolled` }); onClose(); } })}>
-            {enroll.isPending ? "Enrolling..." : `Enroll ${sel.length || ""}`}
+            onClick={() => enroll.mutate({ id: campaignId, data: { leadIds: sel } }, { onSuccess: () => { refresh(); toast({ title: `${sel.length} ${sel.length === 1 ? "person" : "people"} added` }); onClose(); } })}>
+            {enroll.isPending ? "Adding..." : `Add ${sel.length || ""}`}
           </Button>
         </DialogFooter>
       </DialogContent>

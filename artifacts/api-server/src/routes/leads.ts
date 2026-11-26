@@ -28,6 +28,8 @@ import {
 } from "@workspace/api-zod";
 import { qualifyLead, researchCompany } from "../lib/ai";
 import { serializeTasks } from "./tasks";
+import { apolloKey, enrichOrganization } from "../lib/apollo";
+import { logger } from "../lib/logger";
 import {
   getSettings,
   leadName,
@@ -76,6 +78,7 @@ router.post("/leads", async (req, res): Promise<void> => {
   }
   const [lead] = await db.insert(leadsTable).values(parsed.data).returning();
   await logActivity({ type: "lead_added", description: `${leadName(lead!)} added`, leadId: lead!.id });
+  companyDetailsInBackground([lead!]);
   const [out] = await serializeLeads([lead!]);
   res.status(201).json(out);
 });
@@ -88,9 +91,11 @@ router.post("/leads/import", async (req, res): Promise<void> => {
   }
   const valid = parsed.data.leads.filter((l) => l.firstName?.trim());
   if (valid.length) {
-    await db.insert(leadsTable).values(
-      valid.map((l) => ({ ...l, campaignId: parsed.data.campaignId ?? l.campaignId ?? null })),
-    );
+    const inserted = await db
+      .insert(leadsTable)
+      .values(valid.map((l) => ({ ...l, campaignId: parsed.data.campaignId ?? l.campaignId ?? null })))
+      .returning();
+    companyDetailsInBackground(inserted);
     await logActivity({ type: "lead_added", description: `${valid.length} leads imported` });
   }
   res.json(
@@ -114,6 +119,38 @@ function htmlToText(html: string): string {
     .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+
+type LeadRowT = typeof leadsTable.$inferSelect;
+
+/** Fill company details (industry, size, location, LinkedIn page) from Apollo. Only fills empty fields. */
+async function applyCompanyDetails(lead: LeadRowT): Promise<LeadRowT> {
+  if (!apolloKey()) return lead;
+  const site = websiteFor(lead);
+  if (!site) return lead;
+  const domain = new URL(site).hostname.replace(/^www\./, "");
+  const org = await enrichOrganization(domain);
+  if (!org) return lead;
+  const patch = {
+    company: lead.company || org.company,
+    website: lead.website || org.website || site,
+    industry: lead.industry || org.industry,
+    companySize: lead.companySize || org.companySize,
+    companyLocation: lead.companyLocation || org.companyLocation,
+    companyLinkedinUrl: lead.companyLinkedinUrl || org.companyLinkedinUrl,
+  };
+  const [updated] = await db.update(leadsTable).set(patch).where(eq(leadsTable.id, lead.id)).returning();
+  return updated ?? lead;
+}
+
+function companyDetailsInBackground(leads: LeadRowT[]): void {
+  if (!apolloKey()) return;
+  const todo = leads.filter((l) => !l.companySize && websiteFor(l));
+  if (!todo.length) return;
+  void batchProcess(todo, (l) => applyCompanyDetails(l), { concurrency: 2, retries: 1 }).catch((err) =>
+    logger.warn({ err }, "Apollo company details failed"),
+  );
 }
 
 router.post("/leads/qualify", async (req, res): Promise<void> => {
@@ -151,10 +188,19 @@ router.post("/leads/:id/enrich", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, params.data.id));
-  if (!lead) {
+  const [found] = await db.select().from(leadsTable).where(eq(leadsTable.id, params.data.id));
+  if (!found) {
     res.status(404).json({ error: "Lead not found" });
     return;
+  }
+  let lead = found;
+  let apolloOk = false;
+  try {
+    const before = lead.companySize;
+    lead = await applyCompanyDetails(lead);
+    apolloOk = !!lead.companySize && lead.companySize !== before;
+  } catch (err) {
+    logger.warn({ err }, "Apollo company details failed");
   }
   const site = websiteFor(lead);
   if (!site) {
@@ -167,10 +213,20 @@ router.post("/leads/:id/enrich", async (req, res): Promise<void> => {
     if (!page.ok) throw new Error(`HTTP ${page.status}`);
     pageText = htmlToText(await page.text()).slice(0, 6000);
   } catch (err) {
+    if (apolloOk) {
+      const [out] = await serializeLeads([lead]);
+      res.json(EnrichLeadResponse.parse(out));
+      return;
+    }
     res.status(400).json({ error: `Could not read ${site}: ${err instanceof Error ? err.message : String(err)}` });
     return;
   }
   if (pageText.length < 40) {
+    if (apolloOk) {
+      const [out] = await serializeLeads([lead]);
+      res.json(EnrichLeadResponse.parse(out));
+      return;
+    }
     res.status(400).json({ error: `${site} has too little readable text to research` });
     return;
   }

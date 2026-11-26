@@ -40,6 +40,15 @@ export interface Lead {
   fitScore?: number | null;
   /** @nullable */
   fitReason?: string | null;
+  /**
+     * Approximate employee count
+     * @nullable
+     */
+  companySize?: string | null;
+  /** @nullable */
+  companyLocation?: string | null;
+  /** @nullable */
+  companyLinkedinUrl?: string | null;
   /** @nullable */
   lastContactedAt?: Date | null;
   createdAt: Date;

@@ -40,6 +40,9 @@ export const ListLeadsResponseItem = zod.object({
   "website": zod.string().nullish(),
   "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
   "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -81,6 +84,9 @@ export const CreateLeadResponse = zod.object({
   "website": zod.string().nullish(),
   "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
   "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -128,6 +134,65 @@ export const QualifyLeadsResponse = zod.object({
 
 
 /**
+ * @summary Whether the Apollo lead database is connected
+ */
+export const GetProspectStatusResponse = zod.object({
+  "configured": zod.boolean()
+})
+
+
+/**
+ * @summary Search Apollo for people by sector, title, company size and location
+ */
+
+
+
+export const SearchProspectsBody = zod.object({
+  "titles": zod.array(zod.string()).optional(),
+  "industries": zod.array(zod.string()).optional().describe('Sector / industry keywords'),
+  "locations": zod.array(zod.string()).optional(),
+  "employeeRanges": zod.array(zod.string()).optional().describe('e.g. 1,10 or 51,200'),
+  "keywords": zod.string().optional(),
+  "page": zod.int().min(1).optional()
+})
+
+export const SearchProspectsResponse = zod.object({
+  "people": zod.array(zod.object({
+  "apolloId": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "title": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "location": zod.string().nullish(),
+  "linkedinUrl": zod.string().nullish(),
+  "hasEmail": zod.boolean(),
+  "alreadyImported": zod.boolean()
+})),
+  "total": zod.int(),
+  "page": zod.int(),
+  "totalPages": zod.int()
+})
+
+
+/**
+ * @summary Reveal contact details for chosen Apollo people and add them as leads
+ */
+export const importProspectsBodyApolloIdsMax = 50;
+
+
+
+export const ImportProspectsBody = zod.object({
+  "apolloIds": zod.array(zod.string()).min(1).max(importProspectsBodyApolloIdsMax),
+  "campaignId": zod.int().optional()
+})
+
+export const ImportProspectsResponse = zod.object({
+  "imported": zod.int(),
+  "skipped": zod.int()
+})
+
+
+/**
  * @summary Read the lead's company website and let AI fill industry, research notes and personalization hooks
  */
 export const EnrichLeadParams = zod.object({
@@ -152,6 +217,9 @@ export const EnrichLeadResponse = zod.object({
   "website": zod.string().nullish(),
   "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
   "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -179,6 +247,9 @@ export const GetLeadResponse = zod.object({
   "website": zod.string().nullish(),
   "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
   "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 }).and(zod.object({
@@ -278,6 +349,9 @@ export const UpdateLeadResponse = zod.object({
   "website": zod.string().nullish(),
   "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
   "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -393,6 +467,9 @@ export const GetCampaignResponse = zod.object({
   "website": zod.string().nullish(),
   "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
   "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 }))
@@ -596,6 +673,9 @@ export const GenerateCampaignSequenceResponse = zod.object({
   "website": zod.string().nullish(),
   "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
   "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 }))
@@ -691,6 +771,9 @@ export const GetConversationResponse = zod.object({
   "website": zod.string().nullish(),
   "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
   "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -816,6 +899,9 @@ export const ReceiveInboundResponse = zod.object({
   "website": zod.string().nullish(),
   "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
   "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -896,6 +982,9 @@ export const InboundWebhookResponse = zod.object({
   "website": zod.string().nullish(),
   "fitScore": zod.int().nullish().describe('0-100 AI fit against the ideal customer profile'),
   "fitReason": zod.string().nullish(),
+  "companySize": zod.string().nullish().describe('Approximate employee count'),
+  "companyLocation": zod.string().nullish(),
+  "companyLinkedinUrl": zod.string().nullish(),
   "lastContactedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })

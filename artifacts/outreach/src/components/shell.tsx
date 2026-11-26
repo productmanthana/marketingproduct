@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutGrid, Send, Users, Inbox, PhoneCall, Settings, Radar, CheckSquare } from "lucide-react";
+import { LayoutGrid, Send, Users, Inbox, PhoneCall, Settings, Radar, CheckSquare, Telescope } from "lucide-react";
 import { useGetDashboardSummary, useGetSettings } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/", label: "Mission", icon: LayoutGrid },
+  { href: "/", label: "Home", icon: LayoutGrid },
   { href: "/campaigns", label: "Campaigns", icon: Send },
+  { href: "/find-leads", label: "Find leads", icon: Telescope },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/inbox", label: "Inbox", icon: Inbox, badge: "needsReview" as const },
   { href: "/calls", label: "Calls", icon: PhoneCall },

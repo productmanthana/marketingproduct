@@ -106,9 +106,71 @@ export interface Lead {
   fitScore?: number | null;
   /** @nullable */
   fitReason?: string | null;
+  /**
+     * Approximate employee count
+     * @nullable
+     */
+  companySize?: string | null;
+  /** @nullable */
+  companyLocation?: string | null;
+  /** @nullable */
+  companyLinkedinUrl?: string | null;
   /** @nullable */
   lastContactedAt?: string | null;
   createdAt: string;
+}
+
+export interface ProspectStatus {
+  configured: boolean;
+}
+
+export interface ProspectSearchInput {
+  titles?: string[];
+  /** Sector / industry keywords */
+  industries?: string[];
+  locations?: string[];
+  /** e.g. 1,10 or 51,200 */
+  employeeRanges?: string[];
+  keywords?: string;
+  /** @minimum 1 */
+  page?: number;
+}
+
+export interface Prospect {
+  apolloId: string;
+  firstName: string;
+  lastName: string;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  company?: string | null;
+  /** @nullable */
+  location?: string | null;
+  /** @nullable */
+  linkedinUrl?: string | null;
+  hasEmail: boolean;
+  alreadyImported: boolean;
+}
+
+export interface ProspectSearchResult {
+  people: Prospect[];
+  total: number;
+  page: number;
+  totalPages: number;
+}
+
+export interface ProspectImportInput {
+  /**
+     * @minItems 1
+     * @maxItems 50
+     */
+  apolloIds: string[];
+  campaignId?: number;
+}
+
+export interface ProspectImportResult {
+  imported: number;
+  skipped: number;
 }
 
 export interface Conversation {
