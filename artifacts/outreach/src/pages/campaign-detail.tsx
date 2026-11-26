@@ -1,7 +1,7 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronLeft, Pause, Play, Eye, Pencil, Plus, Rocket, RotateCcw, Sparkles, Trash2, UserPlus, Users, Workflow } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronLeft, Lock, Pause, Play, Eye, Pencil, Plus, Rocket, RotateCcw, Sparkles, Trash2, UserPlus, Users, Workflow } from "lucide-react";
 import {
   useGetCampaign, useUpdateCampaign, useDeleteCampaign, useAddSequenceStep, useUpdateSequenceStep, useDeleteSequenceStep,
   useEnrollLeads, useGenerateCampaignSequence, useRunCampaign, useListLeads, usePreviewSequenceStep, useWriteCampaignPitch,
@@ -83,6 +83,8 @@ export default function CampaignDetail() {
   const missing = !offerDone ? "Finish step 1: describe what you're offering." : !steps.length ? "Finish step 2: add at least one message." : !c.leads.length ? "Finish step 3: add the people who should receive it." : null;
   const cur = active ?? (flow.find((f) => !f.done)?.n ?? 4);
   const go = (n: number) => { setActive(n); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const locked = (n: number) => flow.slice(0, n - 1).some((f) => !f.done);
+  const writeMessages = (title: string) => gen.mutate({ id }, { onSuccess: () => { refresh(); toast({ title }); }, onError: () => toast({ title: "AI could not write the messages", variant: "destructive" }) });
   const firstCh = steps[0]?.channel as Ch | undefined;
   const runIt = () => run.mutate({ id }, {
     onSuccess: (r) => { setResult(r); refresh(); toast({ title: r.messagesSent || r.callsScheduled ? "Sent!" : "Nothing new to send right now", description: `${r.messagesSent} messages sent, ${r.callsScheduled} calls added to your call list` }); },
@@ -104,11 +106,12 @@ export default function CampaignDetail() {
           <ol className="grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="flow-progress">
             {flow.map((f) => {
               const on = f.n === cur;
+              const lock = locked(f.n);
               return (
                 <li key={f.n}>
-                  <button type="button" onClick={() => go(f.n)} aria-current={on ? "step" : undefined} data-testid={`button-goto-step-${f.n}`}
-                    className={`flex w-full items-center gap-2 rounded-lg border-2 px-3 py-2.5 text-left text-sm transition-colors ${on ? "border-primary bg-primary/5" : f.done ? "border-[hsl(var(--ch-linkedin)/.4)] bg-[hsl(var(--ch-linkedin)/.08)] hover:border-[hsl(var(--ch-linkedin))]" : "border-border bg-card hover:border-primary/40"}`}>
-                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold ${on ? "bg-primary text-primary-foreground" : f.done ? "bg-[hsl(var(--ch-linkedin))] text-white" : "bg-muted text-muted-foreground"}`}>{f.done && !on ? <Check className="h-4 w-4" /> : f.n}</span>
+                  <button type="button" disabled={lock} onClick={() => go(f.n)} title={lock ? `Finish step ${f.n - 1} first` : undefined} aria-current={on ? "step" : undefined} data-testid={`button-goto-step-${f.n}`}
+                    className={`flex w-full items-center gap-2 rounded-lg border-2 px-3 py-2.5 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${on ? "border-primary bg-primary/5" : f.done ? "border-[hsl(var(--ch-linkedin)/.4)] bg-[hsl(var(--ch-linkedin)/.08)] hover:border-[hsl(var(--ch-linkedin))]" : "border-border bg-card hover:border-primary/40"}`}>
+                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold ${on ? "bg-primary text-primary-foreground" : f.done ? "bg-[hsl(var(--ch-linkedin))] text-white" : "bg-muted text-muted-foreground"}`}>{f.done && !on ? <Check className="h-4 w-4" /> : lock ? <Lock className="h-3.5 w-3.5" /> : f.n}</span>
                     <span className={on || f.done ? "font-semibold" : "text-muted-foreground"}>{f.label}</span>
                   </button>
                 </li>
@@ -127,14 +130,14 @@ export default function CampaignDetail() {
 
         {cur === 1 && <FlowSection n={1} title="What are you offering?" hint="Tell the AI what you sell and what you want people to do. It uses this to write every message and every reply." done={offerDone}>
           <SettingsForm c={c} saving={update.isPending} onSave={(d) => d.productPitch.trim().length >= 20
-            ? patch(d, "Saved", () => go(2))
+            ? patch(d, "Saved", () => { go(2); if (!steps.length) writeMessages("Your messages are ready. Read them, change anything you like, then press Next."); })
             : patch(d, "Saved. One more thing before step 2", undefined, "Fill in \"What do you sell, and who is it for?\" (or press Write it with AI) so the AI can write your messages.")} />
         </FlowSection>}
 
         {cur === 2 && <FlowSection n={2} title="Your messages" hint="The messages each person receives, in order. The AI personalises every one for the person it goes to. Follow-ups stop automatically as soon as someone replies." done={steps.length > 0}
           action={steps.length > 0 && <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" disabled={gen.isPending || !offerDone} title={!offerDone ? "Finish step 1 first" : undefined} data-testid="button-generate-sequence"
-              onClick={() => gen.mutate({ id }, { onSuccess: () => { refresh(); toast({ title: "Messages rewritten by AI" }); }, onError: () => toast({ title: "AI could not write the messages", variant: "destructive" }) })}>
+            <Button size="sm" variant="outline" disabled={gen.isPending} data-testid="button-generate-sequence"
+              onClick={() => writeMessages("Messages rewritten by AI")}>
               <Sparkles className="mr-1 h-3.5 w-3.5 text-primary" />{gen.isPending ? "Writing..." : "Rewrite all with AI"}
             </Button>
             <Button size="sm" onClick={() => setStepEdit("new")} data-testid="button-add-step"><Plus className="mr-1 h-3.5 w-3.5" />Add message</Button>
@@ -143,12 +146,11 @@ export default function CampaignDetail() {
           {!steps.length && !gen.isPending ? (
             <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
               <Workflow className="h-8 w-8 text-muted-foreground" />
-              <p className="max-w-md text-sm text-muted-foreground">{offerDone ? "Let the AI write a series of emails, LinkedIn messages and call reminders for you, or write your own." : "The AI needs to know what you sell before it can write your messages. Add that in step 1 (it takes a minute), or write your own messages."}</p>
+              <p className="max-w-md text-sm text-muted-foreground">Let the AI write a series of emails, LinkedIn messages and call reminders for you, or write your own.</p>
               <div className="flex flex-wrap justify-center gap-2">
-                {!offerDone && <Button onClick={() => go(1)} data-testid="button-goto-offer"><ArrowLeft className="mr-1 h-4 w-4" />Go to step 1 and describe your offer</Button>}
-                {offerDone && <Button data-testid="button-generate-sequence-empty"
-                  onClick={() => gen.mutate({ id }, { onSuccess: () => { refresh(); toast({ title: "Your messages are ready" }); }, onError: () => toast({ title: "AI could not write the messages", variant: "destructive" }) })}>
-                  <Sparkles className="mr-1 h-4 w-4" />Write them for me with AI</Button>}
+                <Button data-testid="button-generate-sequence-empty"
+                  onClick={() => writeMessages("Your messages are ready")}>
+                  <Sparkles className="mr-1 h-4 w-4" />Write them for me with AI</Button>
                 <Button variant="outline" onClick={() => setStepEdit("new")} data-testid="button-add-step-empty"><Pencil className="mr-1 h-4 w-4" />I'll write my own</Button>
               </div>
             </div>
