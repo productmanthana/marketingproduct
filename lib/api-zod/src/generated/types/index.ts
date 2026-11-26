@@ -88,6 +88,8 @@ export * from './runResult';
 export * from './searchHit';
 export * from './searchHitKind';
 export * from './sentiment';
+export * from './sentItem';
+export * from './sentItemKind';
 export * from './sequenceStep';
 export * from './sequenceStepInput';
 export * from './sequenceStepUpdate';

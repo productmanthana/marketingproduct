@@ -89,6 +89,7 @@ import type {
   QualifyResult,
   RunResult,
   SearchHit,
+  SentItem,
   SequenceStep,
   SequenceStepInput,
   SequenceStepUpdate,
@@ -2265,6 +2266,107 @@ export const useRunCampaign = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getRunCampaignMutationOptions(options), queryClient);
     }
+
+export const getListCampaignSentUrl = (id: number,) => {
+
+
+
+
+  return `/api/campaigns/${id}/sent`
+}
+
+/**
+ * @summary Everything this campaign sent (emails, LinkedIn messages) and its calls, newest first
+ */
+export const listCampaignSent = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<SentItem[]> => {
+
+  return customFetch<SentItem[]>(getListCampaignSentUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCampaignSentQueryKey = (id: number,) => {
+    return [
+    `/api/campaigns/${id}/sent`
+    ] as const;
+    }
+
+
+export const getListCampaignSentQueryOptions = <TData = Awaited<ReturnType<typeof listCampaignSent>>, TError = ErrorType<unknown>>(id: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCampaignSent>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCampaignSentQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCampaignSent>>> = ({ signal }) => listCampaignSent(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCampaignSent>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListCampaignSentQueryResult = NonNullable<Awaited<ReturnType<typeof listCampaignSent>>>
+export type ListCampaignSentQueryError = ErrorType<unknown>
+
+
+export function useListCampaignSent<TData = Awaited<ReturnType<typeof listCampaignSent>>, TError = ErrorType<unknown>>(
+ id: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCampaignSent>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCampaignSent>>,
+          TError,
+          Awaited<ReturnType<typeof listCampaignSent>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCampaignSent<TData = Awaited<ReturnType<typeof listCampaignSent>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCampaignSent>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCampaignSent>>,
+          TError,
+          Awaited<ReturnType<typeof listCampaignSent>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCampaignSent<TData = Awaited<ReturnType<typeof listCampaignSent>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCampaignSent>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Everything this campaign sent (emails, LinkedIn messages) and its calls, newest first
+ */
+
+export function useListCampaignSent<TData = Awaited<ReturnType<typeof listCampaignSent>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCampaignSent>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListCampaignSentQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListConversationsUrl = (params?: ListConversationsParams,) => {
   const normalizedParams = new URLSearchParams();

@@ -781,6 +781,29 @@ export const RunCampaignResponse = zod.object({
 })
 
 
+/**
+ * @summary Everything this campaign sent (emails, LinkedIn messages) and its calls, newest first
+ */
+export const ListCampaignSentParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ListCampaignSentResponseItem = zod.object({
+  "key": zod.string(),
+  "kind": zod.enum(['message', 'call']),
+  "channel": zod.string(),
+  "leadId": zod.int(),
+  "leadName": zod.string(),
+  "subject": zod.string().nullish(),
+  "body": zod.string().nullish(),
+  "status": zod.string().describe('Message delivery status or call status'),
+  "error": zod.string().nullish(),
+  "openedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCampaignSentResponse = zod.array(ListCampaignSentResponseItem)
+
+
 export const ListConversationsQueryParams = zod.object({
   "channel": zod.enum(['email', 'linkedin', 'call']).optional(),
   "status": zod.enum(['open', 'auto_replied', 'needs_review', 'closed']).optional()

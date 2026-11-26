@@ -358,6 +358,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RunResult" }
+  /campaigns/{id}/sent:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: listCampaignSent
+      tags: [campaigns]
+      summary: Everything this campaign sent (emails, LinkedIn messages) and its calls, newest first
+      responses:
+        "200":
+          description: Sent items
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/SentItem" } }
 
   /conversations:
     get:
@@ -1028,6 +1041,21 @@ components:
         companyLocation: { type: ["string", "null"] }
         companyLinkedinUrl: { type: ["string", "null"] }
         lastContactedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    SentItem:
+      type: object
+      required: [key, kind, channel, leadId, leadName, status, createdAt]
+      properties:
+        key: { type: string }
+        kind: { type: string, enum: [message, call] }
+        channel: { type: string }
+        leadId: { type: integer }
+        leadName: { type: string }
+        subject: { type: ["string", "null"] }
+        body: { type: ["string", "null"] }
+        status: { type: string, description: "Message delivery status or call status" }
+        error: { type: ["string", "null"] }
+        openedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     ProspectStatus:
       type: object

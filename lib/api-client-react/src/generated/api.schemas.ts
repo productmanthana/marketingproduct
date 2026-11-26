@@ -129,6 +129,33 @@ export interface Lead {
   createdAt: string;
 }
 
+export type SentItemKind = typeof SentItemKind[keyof typeof SentItemKind];
+
+
+export const SentItemKind = {
+  message: 'message',
+  call: 'call',
+} as const;
+
+export interface SentItem {
+  key: string;
+  kind: SentItemKind;
+  channel: string;
+  leadId: number;
+  leadName: string;
+  /** @nullable */
+  subject?: string | null;
+  /** @nullable */
+  body?: string | null;
+  /** Message delivery status or call status */
+  status: string;
+  /** @nullable */
+  error?: string | null;
+  /** @nullable */
+  openedAt?: string | null;
+  createdAt: string;
+}
+
 export interface ProspectStatus {
   configured: boolean;
 }

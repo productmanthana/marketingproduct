@@ -23,6 +23,7 @@ import { QuickAddPerson } from "@/components/quick-add-person";
 import { SpreadsheetToCampaign } from "@/components/spreadsheet-upload";
 import { ApolloToCampaign } from "@/components/apollo-to-campaign";
 import { RecipientList } from "@/components/recipient-list";
+import { SentLog } from "@/components/sent-log";
 import { PageHeader, Panel, Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, useRefreshAll, CH, chColor, TONE_OPTIONS, ago, errMsg, type Ch } from "@/components/bits";
 
 const STATE_LABEL: Record<string, string> = { draft: "Not started", active: "Sending", paused: "Paused", completed: "Finished" };
@@ -266,6 +267,7 @@ export default function CampaignDetail() {
               </Button>
               {started && <Link href="/inbox" className="inline-flex h-10 items-center rounded-md border border-input px-4 text-sm hover:bg-muted" data-testid="link-open-inbox">Open Inbox</Link>}
             </div>
+            {started && <SentLog campaignId={c.id} />}
           </div>
           <WizardNav onBack={() => go(3)} />
         </FlowSection>}
