@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link, useSearch } from "wouter";
-import { Plus, Search, Sparkles, Upload, Users } from "lucide-react";
+import { Pencil, Plus, Search, Sparkles, Upload, Users } from "lucide-react";
 import { useListLeads, useListCampaigns, useCreateLead, useQualifyLeads } from "@workspace/api-client-react";
-import type { LeadInput, LeadStatus } from "@workspace/api-client-react";
+import type { Lead, LeadInput, LeadStatus } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader, Rows, ErrorBox, Empty, Pill, Initials, AiWorking, ago, label, errMsg, useRefreshAll } from "@/components/bits";
 import { FitBadge } from "@/components/fit-badge";
+import { EditLeadDialog } from "@/components/edit-lead-dialog";
 import { SpreadsheetPicker, useImportInBatches } from "@/components/spreadsheet-upload";
 
 const STATUSES = ["new", "contacted", "replied", "interested", "meeting_booked", "not_interested", "unsubscribed"];
@@ -23,6 +24,7 @@ export default function Leads() {
   const [campaignId, setCampaignId] = useState("");
   const [add, setAdd] = useState(false);
   const [imp, setImp] = useState(false);
+  const [editing, setEditing] = useState<Lead | null>(null);
   const q = useListLeads({ search: search || undefined, status: (status || undefined) as LeadStatus | undefined, campaignId: campaignId ? Number(campaignId) : undefined });
   const camps = useListCampaigns();
   const qualify = useQualifyLeads();
@@ -55,6 +57,7 @@ export default function Leads() {
             <option value="">All campaigns</option>{camps.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
+        {!!q.data?.length && <div className="text-xs text-muted-foreground" data-testid="text-lead-count">Showing all {q.data.length} leads</div>}
         <div className="overflow-hidden rounded-xl border border-card-border bg-card">
           {q.isLoading ? <Rows n={8} h={40} /> : q.isError ? <ErrorBox onRetry={() => q.refetch()} /> : !q.data?.length ? (
             <Empty icon={Users} title={search || status || campaignId ? "No matches" : "No leads yet"} body="Add a lead by hand or upload an Excel/CSV file to import hundreds at once.">
@@ -64,7 +67,7 @@ export default function Leads() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="border-b border-border text-left font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  <th className="px-4 py-2 font-normal">Lead</th><th className="px-3 font-normal">Company</th><th className="px-3 font-normal">Fit</th><th className="px-3 font-normal">Campaign</th><th className="px-3 font-normal">Step</th><th className="px-3 font-normal">Last touch</th><th className="px-4 text-right font-normal">Status</th>
+                  <th className="px-4 py-2 font-normal">Lead</th><th className="px-3 font-normal">Company</th><th className="px-3 font-normal">Fit</th><th className="px-3 font-normal">Campaign</th><th className="px-3 font-normal">Step</th><th className="px-3 font-normal">Last touch</th><th className="px-4 text-right font-normal">Status</th><th className="w-10" />
                 </tr></thead>
                 <tbody>
                   {q.data.map((l, i) => (
@@ -77,6 +80,7 @@ export default function Leads() {
                       <td className="px-3 font-mono text-xs">{l.currentStep ?? 0}</td>
                       <td className="px-3 font-mono text-xs text-muted-foreground">{ago(l.lastContactedAt)}</td>
                       <td className="px-4 text-right"><Pill value={l.status} /></td>
+                      <td className="pr-3"><Button size="icon" variant="ghost" className="h-7 w-7" title="Edit lead" onClick={() => setEditing(l)} data-testid={`button-edit-lead-${l.id}`}><Pencil className="h-3.5 w-3.5" /></Button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -86,6 +90,7 @@ export default function Leads() {
         </div>
       </div>
       {add && <AddLead onClose={() => setAdd(false)} campaigns={camps.data ?? []} />}
+      {editing && <EditLeadDialog lead={editing} onClose={() => setEditing(null)} />}
       {imp && <ImportLeads onClose={() => setImp(false)} campaigns={camps.data ?? []} />}
     </div>
   );
