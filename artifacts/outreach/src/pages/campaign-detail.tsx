@@ -16,7 +16,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { WaitPicker } from "@/components/wait-picker";
+import { WaitPicker, waitLabel } from "@/components/wait-picker";
+import { SendPace, gapLabel } from "@/components/send-pace";
 import { QuickAddPerson } from "@/components/quick-add-person";
 import { SpreadsheetToCampaign } from "@/components/spreadsheet-upload";
 import { RecipientList } from "@/components/recipient-list";
@@ -93,6 +94,7 @@ export default function CampaignDetail() {
   const locked = (n: number) => flow.slice(0, n - 1).some((f) => !f.done);
   const writeMessages = (title: string) => gen.mutate({ id }, { onSuccess: () => { refresh(); toast({ title }); }, onError: () => toast({ title: "AI could not write the messages", variant: "destructive" }) });
   const firstCh = steps[0]?.channel as Ch | undefined;
+  const firstWait = !!steps[0] && (steps[0].delayDays > 0 || steps[0].delayHours > 0);
   const runIt = () => run.mutate({ id }, {
     onSuccess: (r) => { setResult(r); refresh(); toast({ title: r.messagesSent || r.callsScheduled ? "Sent!" : "Nothing new to send right now", description: `${r.messagesSent} messages sent, ${r.callsScheduled} calls added to your call list` }); },
     onError: (e) => toast({ title: "Could not send", description: errMsg(e), variant: "destructive" }),
@@ -223,6 +225,8 @@ export default function CampaignDetail() {
                   )}
                 </Link>
               ))}
+              <SendPace minutes={c.sendGapMinutes} people={c.leads.length} disabled={update.isPending}
+                onChange={(m) => update.mutate({ id, data: { sendGapMinutes: m } }, { onSuccess: refresh })} />
             </div>
           )}
           <WizardNav onBack={() => go(2)} onNext={() => go(4)} nextDisabled={!c.leads.length} hint={!c.leads.length ? "Add at least one person to continue." : null} />
@@ -241,7 +245,7 @@ export default function CampaignDetail() {
               <p className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground" data-testid="text-launch-missing">{missing}</p>
             ) : !started && (
               <p className="text-sm" data-testid="text-launch-summary">
-                When you press <b>Start sending</b>, <b>{c.leads.length} {c.leads.length === 1 ? "person" : "people"}</b> will get message 1{firstCh ? ` by ${CH[firstCh].label.toLowerCase()}` : ""} right away.
+                When you press <b>Start sending</b>, <b>{c.leads.length} {c.leads.length === 1 ? "person" : "people"}</b> will get message 1{firstCh ? ` by ${CH[firstCh].label.toLowerCase()}` : ""}{firstWait ? ` ${waitLabel(steps[0]!)} later` : " right away"}{c.sendGapMinutes && c.leads.length > 1 ? `, ${gapLabel(c.sendGapMinutes)}` : ""}.
                 {steps.length > 1 && ` The other ${steps.length - 1} follow-up${steps.length > 2 ? "s go" : " goes"} out automatically on schedule.`}
                 {c.autoReply ? " When someone replies, the AI answers for you (anything negative waits for you in the Inbox)." : " Replies wait for you in the Inbox."}
               </p>
@@ -335,14 +339,12 @@ function StepRow({ s, i, last, campaignId, prev, next, onEdit, onPreview }: { s:
       <div className="group min-w-0 flex-1 rounded-lg border border-border bg-background/60 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold" style={{ color: chColor(ch) }}>{i + 1}. {ROW_LABEL[ch]}</span>
-          {i === 0 ? <span className="text-xs text-muted-foreground">sent right away when you start{ch === "call" && " · added to your call list"}</span> : (
-            <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              Wait
-              <WaitPicker value={s} disabled={upd.isPending} className="h-7 text-xs text-foreground" testId={`select-step-wait-${s.id}`}
-                onChange={(w) => upd.mutate({ id: campaignId, stepId: s.id, data: w }, { onSuccess: refresh })} />
-              after the previous message, only if they haven't replied{ch === "call" && " · added to your call list"}
-            </span>
-          )}
+          <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            Wait
+            <WaitPicker value={s} disabled={upd.isPending} className="h-7 text-xs text-foreground" testId={`select-step-wait-${s.id}`}
+              onChange={(w) => upd.mutate({ id: campaignId, stepId: s.id, data: w }, { onSuccess: refresh })} />
+            {i === 0 ? "after you press Start sending" : "after the previous message, only if they haven't replied"}{ch === "call" && " · added to your call list"}
+          </span>
           <div className="ml-auto flex gap-0.5 opacity-60 group-hover:opacity-100">
             <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!prev || upd.isPending} onClick={() => swap(prev)} data-testid={`button-step-up-${s.id}`}><ArrowUp className="h-3.5 w-3.5" /></Button>
             <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!next || upd.isPending} onClick={() => swap(next)} data-testid={`button-step-down-${s.id}`}><ArrowDown className="h-3.5 w-3.5" /></Button>
@@ -382,7 +384,7 @@ function StepDialog({ campaignId, step, onClose }: { campaignId: number; step: S
                 style={on ? { borderColor: chColor(k), background: chColor(k, 0.1), color: chColor(k) } : {}}><I className="h-4 w-4" />{CH[k].label}</button>;
             })}
           </div>
-          <div><Label className="text-xs">How long to wait after the previous message? (the first message always goes right away)</Label>
+          <div><Label className="text-xs">How long to wait after the previous message? (for message 1: after you press Start sending)</Label>
             <WaitPicker value={f.wait} onChange={(w) => setF({ ...f, wait: w })} className="h-9 w-full" testId="input-step-delay" /></div>
           {f.channel === "email" && <div><Label className="text-xs">Subject</Label><Input value={f.subject} onChange={(e) => setF({ ...f, subject: e.target.value })} data-testid="input-step-subject" /></div>}
           <div><Label className="text-xs">{f.channel === "call" ? "What should this call achieve?" : "Message"}</Label>

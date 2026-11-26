@@ -15,5 +15,10 @@ export interface CampaignUpdate {
   autoReply?: boolean;
   replyTone?: string;
   meetingLink?: string;
+  /**
+     * Minutes between each person getting message 1; 0 sends to everyone at once
+     * @minimum 0
+     */
+  sendGapMinutes?: number;
   status?: CampaignStatus;
 }

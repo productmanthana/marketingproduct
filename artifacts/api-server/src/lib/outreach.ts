@@ -551,6 +551,31 @@ function loadSteps(campaignId: number) {
     .orderBy(asc(sequenceStepsTable.stepOrder), asc(sequenceStepsTable.id));
 }
 
+/**
+ * People who haven't been scheduled for message 1 yet get a send time: the first message's wait,
+ * plus `sendGapMinutes` per person ahead of them. Returns the leads that are due right now.
+ */
+async function scheduleFirstMessages(
+  leads: LeadRow[],
+  campaign: CampaignRow,
+  steps: Awaited<ReturnType<typeof loadSteps>>,
+) {
+  const first = steps[0];
+  const firstDelay = first ? first.delayDays * DAY_MS + first.delayHours * HOUR_MS : 0;
+  const gap = campaign.sendGapMinutes * 60_000;
+  const unscheduled = leads.filter((l) => l.currentStep === 0 && !l.nextStepAt).sort((a, b) => a.id - b.id);
+  if (!unscheduled.length || (!firstDelay && !gap)) return leads;
+  const now = Date.now();
+  const later = new Set<number>();
+  for (const [i, lead] of unscheduled.entries()) {
+    const offset = firstDelay + i * gap;
+    if (offset <= 0) continue;
+    later.add(lead.id);
+    await db.update(leadsTable).set({ nextStepAt: new Date(now + offset) }).where(eq(leadsTable.id, lead.id));
+  }
+  return leads.filter((l) => !later.has(l.id));
+}
+
 export async function runCampaign(campaignId: number) {
   const [campaign] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, campaignId));
   if (!campaign) throw new Error("Campaign not found");
@@ -570,7 +595,11 @@ export async function runCampaign(campaignId: number) {
         or(isNull(leadsTable.nextStepAt), lte(leadsTable.nextStepAt, new Date())),
       ),
     );
-  const eligible = dueLeads.filter((l) => l.currentStep < steps.length);
+  const eligible = await scheduleFirstMessages(
+    dueLeads.filter((l) => l.currentStep < steps.length),
+    campaign,
+    steps,
+  );
 
   const results = await batchProcess(
     eligible,

@@ -464,6 +464,8 @@ export interface Campaign {
   replyTone: string;
   /** @nullable */
   meetingLink?: string | null;
+  /** Minutes between each person getting message 1; 0 sends to everyone at once */
+  sendGapMinutes: number;
   leadCount: number;
   sentCount: number;
   replyCount: number;
@@ -511,6 +513,11 @@ export interface CampaignUpdate {
   autoReply?: boolean;
   replyTone?: string;
   meetingLink?: string;
+  /**
+     * Minutes between each person getting message 1; 0 sends to everyone at once
+     * @minimum 0
+     */
+  sendGapMinutes?: number;
   status?: CampaignStatus;
 }
 

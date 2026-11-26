@@ -410,6 +410,7 @@ export const ListCampaignsResponseItem = zod.object({
   "autoReply": zod.boolean().describe('If true, AI replies to inbound messages automatically'),
   "replyTone": zod.string(),
   "meetingLink": zod.string().nullish(),
+  "sendGapMinutes": zod.int().describe('Minutes between each person getting message 1; 0 sends to everyone at once'),
   "leadCount": zod.int(),
   "sentCount": zod.int(),
   "replyCount": zod.int(),
@@ -444,6 +445,7 @@ export const CreateCampaignResponse = zod.object({
   "autoReply": zod.boolean().describe('If true, AI replies to inbound messages automatically'),
   "replyTone": zod.string(),
   "meetingLink": zod.string().nullish(),
+  "sendGapMinutes": zod.int().describe('Minutes between each person getting message 1; 0 sends to everyone at once'),
   "leadCount": zod.int(),
   "sentCount": zod.int(),
   "replyCount": zod.int(),
@@ -468,6 +470,7 @@ export const GetCampaignResponse = zod.object({
   "autoReply": zod.boolean().describe('If true, AI replies to inbound messages automatically'),
   "replyTone": zod.string(),
   "meetingLink": zod.string().nullish(),
+  "sendGapMinutes": zod.int().describe('Minutes between each person getting message 1; 0 sends to everyone at once'),
   "leadCount": zod.int(),
   "sentCount": zod.int(),
   "replyCount": zod.int(),
@@ -519,6 +522,10 @@ export const UpdateCampaignParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const updateCampaignBodySendGapMinutesMin = 0;
+
+
+
 export const UpdateCampaignBody = zod.object({
   "name": zod.string().optional(),
   "description": zod.string().optional(),
@@ -527,6 +534,7 @@ export const UpdateCampaignBody = zod.object({
   "autoReply": zod.boolean().optional(),
   "replyTone": zod.string().optional(),
   "meetingLink": zod.string().optional(),
+  "sendGapMinutes": zod.int().min(updateCampaignBodySendGapMinutesMin).optional().describe('Minutes between each person getting message 1; 0 sends to everyone at once'),
   "status": zod.enum(['draft', 'active', 'paused', 'completed']).optional()
 })
 
@@ -540,6 +548,7 @@ export const UpdateCampaignResponse = zod.object({
   "autoReply": zod.boolean().describe('If true, AI replies to inbound messages automatically'),
   "replyTone": zod.string(),
   "meetingLink": zod.string().nullish(),
+  "sendGapMinutes": zod.int().describe('Minutes between each person getting message 1; 0 sends to everyone at once'),
   "leadCount": zod.int(),
   "sentCount": zod.int(),
   "replyCount": zod.int(),
@@ -654,6 +663,7 @@ export const EnrollLeadsResponse = zod.object({
   "autoReply": zod.boolean().describe('If true, AI replies to inbound messages automatically'),
   "replyTone": zod.string(),
   "meetingLink": zod.string().nullish(),
+  "sendGapMinutes": zod.int().describe('Minutes between each person getting message 1; 0 sends to everyone at once'),
   "leadCount": zod.int(),
   "sentCount": zod.int(),
   "replyCount": zod.int(),
@@ -681,6 +691,7 @@ export const GenerateCampaignSequenceResponse = zod.object({
   "autoReply": zod.boolean().describe('If true, AI replies to inbound messages automatically'),
   "replyTone": zod.string(),
   "meetingLink": zod.string().nullish(),
+  "sendGapMinutes": zod.int().describe('Minutes between each person getting message 1; 0 sends to everyone at once'),
   "leadCount": zod.int(),
   "sentCount": zod.int(),
   "replyCount": zod.int(),

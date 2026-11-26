@@ -18,6 +18,7 @@ export const campaignsTable = pgTable("campaigns", {
   autoReply: boolean("auto_reply").notNull().default(true),
   replyTone: text("reply_tone").notNull().default("friendly and concise"),
   meetingLink: text("meeting_link"),
+  sendGapMinutes: integer("send_gap_minutes").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
