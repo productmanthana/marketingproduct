@@ -1134,9 +1134,8 @@ components:
         qualified: { type: integer }
     StepPreviewInput:
       type: object
-      required: [leadId]
       properties:
-        leadId: { type: integer }
+        leadId: { type: integer, description: "Omit to preview for a sample person" }
     PitchInput:
       type: object
       properties:

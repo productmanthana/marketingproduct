@@ -7,5 +7,6 @@
  */
 
 export interface StepPreviewInput {
-  leadId: number;
+  /** Omit to preview for a sample person */
+  leadId?: number;
 }

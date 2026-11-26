@@ -624,7 +624,7 @@ export const PreviewSequenceStepParams = zod.object({
 })
 
 export const PreviewSequenceStepBody = zod.object({
-  "leadId": zod.int()
+  "leadId": zod.int().optional().describe('Omit to preview for a sample person')
 })
 
 export const PreviewSequenceStepResponse = zod.object({

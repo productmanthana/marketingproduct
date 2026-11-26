@@ -372,17 +372,19 @@ function PreviewDialog({ campaignId, step, leads, onClose }: { campaignId: numbe
   const [out, setOut] = useState<StepPreview | null>(null);
   const run = usePreviewSequenceStep();
   const { toast } = useToast();
+  const ready = leads.length > 0 || !others.isLoading;
+  useEffect(() => { if (ready && !leadId) go(pool[0] ? String(pool[0].id) : "sample"); }, [ready]); // eslint-disable-line
   const go = (lid: string) => {
     setLeadId(lid);
     setOut(null);
-    if (lid) run.mutate({ id: campaignId, stepId: step.id, data: { leadId: Number(lid) } }, { onSuccess: setOut, onError: (e) => toast({ title: "Preview failed", description: errMsg(e), variant: "destructive" }) });
+    run.mutate({ id: campaignId, stepId: step.id, data: lid === "sample" ? {} : { leadId: Number(lid) } }, { onSuccess: setOut, onError: (e) => toast({ title: "Preview failed", description: errMsg(e), variant: "destructive" }) });
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle className="font-display text-xl">See message {step.stepOrder} as a real person would</DialogTitle></DialogHeader>
         <select className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm" value={leadId} onChange={(e) => go(e.target.value)} data-testid="select-preview-lead">
-          <option value="">{pool.length ? "Choose a person" : "Add people first"}</option>
+          <option value="sample">Sample person (Priya Sharma, Operations Manager at Sample Co)</option>
           {pool.map((l) => <option key={l.id} value={l.id}>{l.firstName} {l.lastName}{l.company ? ` (${l.company})` : ""}</option>)}
         </select>
         {run.isPending && <AiWorking text="Personalizing this step the way it will be sent" />}
@@ -393,6 +395,7 @@ function PreviewDialog({ campaignId, step, leads, onClose }: { campaignId: numbe
             <p className="mt-1 whitespace-pre-wrap text-sm">{out.body}</p>
           </div>
         )}
+        {leadId === "sample" && <p className="text-xs text-muted-foreground" data-testid="text-sample-preview">This is a made-up person so you can see how it reads. Once you add people in step 3, you can pick a real one here.</p>}
         <DialogFooter><Button variant="outline" disabled={!leadId || run.isPending} onClick={() => go(leadId)} data-testid="button-regenerate-preview">Regenerate</Button></DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, asc, desc, eq, inArray, max } from "drizzle-orm";
-import { db, campaignsTable, leadsTable, sequenceStepsTable } from "@workspace/db";
+import { db, campaignsTable, leadsTable, sequenceStepsTable, type LeadRow } from "@workspace/db";
 import {
   AddSequenceStepBody,
   AddSequenceStepParams,
@@ -29,6 +29,9 @@ import { generateSequence, personalizeMessage, writePitch } from "../lib/ai";
 import { getSettings, runCampaign, serializeCampaigns, serializeLeads } from "../lib/outreach";
 
 const router: IRouter = Router();
+
+/** Stand-in prospect for previews before any leads exist. Only the profile fields the AI reads are set. */
+const SAMPLE_LEAD = { firstName: "Priya", lastName: "Sharma", company: "Sample Co", title: "Operations Manager", industry: null, notes: null } as unknown as LeadRow;
 
 async function campaignDetail(id: number) {
   const [c] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, id));
@@ -193,7 +196,9 @@ router.post("/campaigns/:id/steps/:stepId/preview", async (req, res): Promise<vo
     .select()
     .from(sequenceStepsTable)
     .where(and(eq(sequenceStepsTable.id, params.data.stepId), eq(sequenceStepsTable.campaignId, params.data.id)));
-  const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, parsed.data.leadId));
+  const [lead] = parsed.data.leadId
+    ? await db.select().from(leadsTable).where(eq(leadsTable.id, parsed.data.leadId))
+    : [SAMPLE_LEAD];
   if (!campaign || !step || !lead) {
     res.status(404).json({ error: "Campaign, step or lead not found" });
     return;
