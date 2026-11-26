@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Check, ExternalLink, Lock, Search, Telescope, UserPlus } from "lucide-react";
+import { Check, ExternalLink, Eye, Lock, Search, Telescope, UserPlus } from "lucide-react";
 import {
   useGetProspectStatus,
   useImportProspects,
   useListCampaigns,
+  useRevealProspects,
   useSearchProspects,
 } from "@workspace/api-client-react";
 import type { ProspectSearchInput, ProspectSearchResult } from "@workspace/api-client-react";
@@ -34,6 +35,7 @@ export default function FindLeads() {
   const camps = useListCampaigns();
   const search = useSearchProspects();
   const imp = useImportProspects();
+  const rev = useRevealProspects();
   const refresh = useRefreshAll();
   const { toast } = useToast();
 
@@ -82,6 +84,23 @@ export default function FindLeads() {
     },
   );
 
+  const doReveal = (ids: string[]) => rev.mutate(
+    { data: { apolloIds: ids, source: result?.source ?? source } },
+    {
+      onSuccess: (r) => {
+        const found = new Map(r.people.map((p) => [p.apolloId, p]));
+        setResult((cur) => cur && { ...cur, people: cur.people.map((p) => {
+          const f = found.get(p.apolloId);
+          return f ? { ...p, lastName: f.lastName || p.lastName, email: f.email ?? null, hasEmail: !!f.email } : p;
+        }) });
+        const withEmail = r.people.filter((p) => p.email).length;
+        toast({ title: `Revealed ${withEmail} email${withEmail === 1 ? "" : "s"}`, description: withEmail < ids.length ? `${ids.length - withEmail} had no email` : undefined });
+      },
+      onError: (e) => toast({ title: "Reveal failed", description: errMsg(e), variant: "destructive" }),
+    },
+  );
+  const toReveal = [...picked].filter((id) => { const p = result?.people.find((x) => x.apolloId === id); return p?.hasEmail && !p.email; });
+
   const notConnected = status.data && !status.data.configured;
 
   return (
@@ -115,7 +134,7 @@ export default function FindLeads() {
                 })}
               </div></div>
             <div className="flex items-center justify-between gap-3 md:col-span-2">
-              <p className="text-xs text-muted-foreground">Separate multiple values with commas. Searching is free; adding leads uses credits to reveal emails.</p>
+              <p className="text-xs text-muted-foreground">Separate multiple values with commas. Searching is free; revealing an email (or adding a lead) uses credits, once per person.</p>
               <Button type="submit" disabled={search.isPending || !!notConnected} data-testid="button-search-prospects">
                 <Search className="mr-1 h-4 w-4" />{search.isPending ? "Searching..." : "Search leads"}
               </Button>
@@ -144,6 +163,9 @@ export default function FindLeads() {
                   <option value="">No campaign</option>
                   {camps.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
+                <Button size="sm" variant="outline" disabled={!toReveal.length || rev.isPending} onClick={() => doReveal(toReveal)} data-testid="button-reveal-prospects">
+                  <Eye className="mr-1 h-4 w-4" />{rev.isPending ? "Revealing..." : `Reveal ${toReveal.length || ""} emails`}
+                </Button>
                 <Button size="sm" disabled={!picked.size || imp.isPending} onClick={doImport} data-testid="button-import-prospects">
                   <UserPlus className="mr-1 h-4 w-4" />{imp.isPending ? "Adding..." : `Add ${picked.size || ""} to leads`}
                 </Button>
@@ -169,7 +191,12 @@ export default function FindLeads() {
                           <span><span className="block font-medium">{p.firstName} {p.lastName}</span><span className="block text-xs text-muted-foreground">{p.title}</span></span></div></td>
                         <td className="px-3">{p.company ?? "-"}</td>
                         <td className="px-3 text-xs text-muted-foreground">{p.location ?? "-"}</td>
-                        <td className="px-4 text-right font-mono text-xs">{p.alreadyImported ? <Link href="/leads" className="text-primary hover:underline">added</Link> : p.hasEmail ? "available" : <span className="text-muted-foreground">none</span>}</td>
+                        <td className="px-4 text-right font-mono text-xs">
+                          {p.email ? <span className="select-all" data-testid={`text-email-${p.apolloId}`}>{p.email}</span>
+                            : p.hasEmail && !p.alreadyImported ? <button type="button" disabled={rev.isPending} onClick={() => doReveal([p.apolloId])} className="text-primary hover:underline disabled:opacity-50" data-testid={`button-reveal-${p.apolloId}`}>reveal</button>
+                            : <span className="text-muted-foreground">none</span>}
+                          {p.alreadyImported && <Link href="/leads" className="ml-2 text-primary hover:underline">added</Link>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

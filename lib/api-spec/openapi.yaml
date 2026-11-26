@@ -121,6 +121,22 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ProspectSearchResult" }
+  /prospects/reveal:
+    post:
+      operationId: revealProspects
+      tags: [prospects]
+      summary: Reveal full name and email for chosen people (uses credits) without adding them
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectRevealInput" }
+      responses:
+        "200":
+          description: Revealed people
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectRevealResult" }
   /prospects/import:
     post:
       operationId: importProspects
@@ -1685,6 +1701,7 @@ components:
         location: { type: ["string", "null"] }
         linkedinUrl: { type: ["string", "null"] }
         hasEmail: { type: boolean }
+        email: { type: ["string", "null"], description: "Known email (already revealed or added)" }
         alreadyImported: { type: boolean }
         leadId: { type: ["integer", "null"], description: "The lead this person was added as before" }
         campaignId: { type: ["integer", "null"], description: "Campaign that lead is in now" }
@@ -1705,6 +1722,26 @@ components:
         apolloIds: { type: array, items: { type: string }, minItems: 1, maxItems: 50 }
         campaignId: { type: integer }
         source: { $ref: "#/components/schemas/LeadSource" }
+    ProspectRevealInput:
+      type: object
+      required: [apolloIds]
+      properties:
+        apolloIds: { type: array, items: { type: string }, minItems: 1, maxItems: 25 }
+        source: { $ref: "#/components/schemas/LeadSource" }
+    ProspectRevealResult:
+      type: object
+      required: [people]
+      properties:
+        people:
+          type: array
+          items:
+            type: object
+            required: [apolloId, firstName, lastName]
+            properties:
+              apolloId: { type: string }
+              firstName: { type: string }
+              lastName: { type: string }
+              email: { type: ["string", "null"] }
     ProspectImportResult:
       type: object
       required: [imported, skipped]

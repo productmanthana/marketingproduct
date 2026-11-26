@@ -190,6 +190,7 @@ export const SearchProspectsResponse = zod.object({
   "location": zod.string().nullish(),
   "linkedinUrl": zod.string().nullish(),
   "hasEmail": zod.boolean(),
+  "email": zod.string().nullish().describe('Known email (already revealed or added)'),
   "alreadyImported": zod.boolean(),
   "leadId": zod.int().nullish().describe('The lead this person was added as before'),
   "campaignId": zod.int().nullish().describe('Campaign that lead is in now'),
@@ -198,6 +199,28 @@ export const SearchProspectsResponse = zod.object({
   "total": zod.int(),
   "page": zod.int(),
   "totalPages": zod.int()
+})
+
+
+/**
+ * @summary Reveal full name and email for chosen people (uses credits) without adding them
+ */
+export const revealProspectsBodyApolloIdsMax = 25;
+
+
+
+export const RevealProspectsBody = zod.object({
+  "apolloIds": zod.array(zod.string()).min(1).max(revealProspectsBodyApolloIdsMax),
+  "source": zod.enum(['auto', 'firecrawl', 'apollo']).optional().describe('auto tries Firecrawl first, then Apollo')
+})
+
+export const RevealProspectsResponse = zod.object({
+  "people": zod.array(zod.object({
+  "apolloId": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "email": zod.string().nullish()
+}))
 })
 
 

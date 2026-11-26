@@ -96,6 +96,8 @@ import type {
   PitchResult,
   ProspectImportInput,
   ProspectImportResult,
+  ProspectRevealInput,
+  ProspectRevealResult,
   ProspectSearchInput,
   ProspectSearchResult,
   ProspectStatus,
@@ -804,6 +806,94 @@ export const useSearchProspects = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getSearchProspectsMutationOptions(options), queryClient);
+    }
+
+export const getRevealProspectsUrl = () => {
+
+
+
+
+  return `/api/prospects/reveal`
+}
+
+/**
+ * @summary Reveal full name and email for chosen people (uses credits) without adding them
+ */
+export const revealProspects = async (prospectRevealInput: ProspectRevealInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectRevealResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectRevealResult>(getRevealProspectsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(prospectRevealInput)
+  }
+);}
+
+
+
+
+
+export const getRevealProspectsMutationKey = () => ['revealProspects'] as const;
+
+export const getRevealProspectsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revealProspects>>, TError,RevealProspectsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revealProspects>>, TError,RevealProspectsMutationVariables, TContext> => {
+
+const mutationKey = getRevealProspectsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revealProspects>>, RevealProspectsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  revealProspects(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevealProspectsMutationResult = NonNullable<Awaited<ReturnType<typeof revealProspects>>>
+    export type RevealProspectsMutationBody = BodyType<ProspectRevealInput>
+    export type RevealProspectsMutationError = ErrorType<unknown>
+    export type RevealProspectsMutationVariables = {data: BodyType<ProspectRevealInput>}
+
+    /**
+ * @summary Reveal full name and email for chosen people (uses credits) without adding them
+ */
+export const useRevealProspects = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revealProspects>>, TError,RevealProspectsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof revealProspects>>,
+        TError,
+        RevealProspectsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRevealProspectsMutationOptions(options), queryClient);
     }
 
 export const getImportProspectsUrl = () => {
