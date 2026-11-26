@@ -9,6 +9,9 @@ import mailboxesRouter from "./mailboxes";
 import tasksRouter from "./tasks";
 import publicRouter from "./public";
 import prospectsRouter from "./prospects";
+import accountsRouter from "./accounts";
+import dealsRouter from "./deals";
+import crmRouter from "./crm";
 
 const router: IRouter = Router();
 
@@ -22,5 +25,8 @@ router.use(mailboxesRouter);
 router.use(tasksRouter);
 router.use(publicRouter);
 router.use(prospectsRouter);
+router.use(accountsRouter);
+router.use(dealsRouter);
+router.use(crmRouter);
 
 export default router;

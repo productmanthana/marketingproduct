@@ -94,6 +94,10 @@ export interface Lead {
   campaignId?: number | null;
   /** @nullable */
   campaignName?: string | null;
+  /** @nullable */
+  accountId?: number | null;
+  /** @nullable */
+  accountName?: string | null;
   currentStep?: number;
   /** @nullable */
   notes?: string | null;
@@ -171,6 +175,60 @@ export interface ProspectImportInput {
 export interface ProspectImportResult {
   imported: number;
   skipped: number;
+}
+
+export type DealStage = typeof DealStage[keyof typeof DealStage];
+
+
+export const DealStage = {
+  prospecting: 'prospecting',
+  qualification: 'qualification',
+  proposal: 'proposal',
+  negotiation: 'negotiation',
+  closed_won: 'closed_won',
+  closed_lost: 'closed_lost',
+} as const;
+
+export type DealSource = typeof DealSource[keyof typeof DealSource];
+
+
+export const DealSource = {
+  manual: 'manual',
+  lead_conversion: 'lead_conversion',
+  meeting_booked: 'meeting_booked',
+} as const;
+
+export interface Deal {
+  id: number;
+  name: string;
+  /** @nullable */
+  accountId?: number | null;
+  /** @nullable */
+  accountName?: string | null;
+  /** @nullable */
+  leadId?: number | null;
+  /** @nullable */
+  leadName?: string | null;
+  stage: DealStage;
+  amount: number;
+  /** 0-100 chance to close */
+  probability: number;
+  /** @nullable */
+  closeDate?: string | null;
+  /** @nullable */
+  ownerName?: string | null;
+  /** @nullable */
+  nextStep?: string | null;
+  /** @nullable */
+  lostReason?: string | null;
+  /** @nullable */
+  description?: string | null;
+  source: DealSource;
+  stageChangedAt: string;
+  /** @nullable */
+  closedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Conversation {
@@ -256,6 +314,12 @@ export const ActivityType = {
   email_opened: 'email_opened',
   unsubscribed: 'unsubscribed',
   delivery_failed: 'delivery_failed',
+  deal_created: 'deal_created',
+  deal_stage_changed: 'deal_stage_changed',
+  deal_won: 'deal_won',
+  deal_lost: 'deal_lost',
+  note_added: 'note_added',
+  account_created: 'account_created',
 } as const;
 
 export interface Activity {
@@ -267,6 +331,10 @@ export interface Activity {
   leadId?: number | null;
   /** @nullable */
   leadName?: string | null;
+  /** @nullable */
+  accountId?: number | null;
+  /** @nullable */
+  dealId?: number | null;
   createdAt: string;
 }
 
@@ -286,6 +354,10 @@ export interface Task {
   leadId?: number | null;
   /** @nullable */
   leadName?: string | null;
+  /** @nullable */
+  dealId?: number | null;
+  /** @nullable */
+  dealName?: string | null;
   title: string;
   /** @nullable */
   dueAt?: string | null;
@@ -295,6 +367,7 @@ export interface Task {
 }
 
 export type LeadDetail = Lead & {
+  deals: Deal[];
   conversations: Conversation[];
   calls: Call[];
   activity: Activity[];
@@ -330,6 +403,8 @@ export interface LeadUpdate {
   status?: LeadStatus;
   /** @nullable */
   campaignId?: number | null;
+  /** @nullable */
+  accountId?: number | null;
 }
 
 export interface LeadImportInput {
@@ -606,6 +681,8 @@ export interface Settings {
   voicePhoneNumberId?: string;
   voiceName?: string;
   voiceConnected?: boolean;
+  /** ISO 4217 code used for deal amounts */
+  currency?: string;
 }
 
 export interface SettingsInput {
@@ -641,6 +718,11 @@ export interface SettingsInput {
   voiceApiKey?: string;
   voicePhoneNumberId?: string;
   voiceName?: string;
+  /**
+     * @minLength 3
+     * @maxLength 3
+     */
+  currency?: string;
 }
 
 export interface Mailbox {
@@ -742,6 +824,7 @@ export interface TaskInput {
   /** @minLength 1 */
   title: string;
   leadId?: number;
+  dealId?: number;
   dueAt?: string;
 }
 
@@ -750,6 +833,244 @@ export interface TaskUpdate {
   /** @nullable */
   dueAt?: string | null;
   done?: boolean;
+}
+
+export type AccountType = typeof AccountType[keyof typeof AccountType];
+
+
+export const AccountType = {
+  prospect: 'prospect',
+  customer: 'customer',
+  partner: 'partner',
+  churned: 'churned',
+} as const;
+
+export interface Account {
+  id: number;
+  name: string;
+  /** @nullable */
+  website?: string | null;
+  /** @nullable */
+  industry?: string | null;
+  /** @nullable */
+  size?: string | null;
+  /** @nullable */
+  location?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  linkedinUrl?: string | null;
+  type: AccountType;
+  /** @nullable */
+  annualRevenue?: number | null;
+  /** @nullable */
+  ownerName?: string | null;
+  /** @nullable */
+  description?: string | null;
+  createdAt: string;
+  contactCount: number;
+  openDealCount: number;
+  /** Sum of open deal amounts */
+  pipelineValue: number;
+  wonValue: number;
+}
+
+export interface AccountInput {
+  /** @minLength 1 */
+  name: string;
+  website?: string;
+  industry?: string;
+  size?: string;
+  location?: string;
+  phone?: string;
+  linkedinUrl?: string;
+  type?: AccountType;
+  annualRevenue?: number;
+  ownerName?: string;
+  description?: string;
+}
+
+export interface AccountUpdate {
+  /** @minLength 1 */
+  name?: string;
+  /** @nullable */
+  website?: string | null;
+  /** @nullable */
+  industry?: string | null;
+  /** @nullable */
+  size?: string | null;
+  /** @nullable */
+  location?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  linkedinUrl?: string | null;
+  type?: AccountType;
+  /** @nullable */
+  annualRevenue?: number | null;
+  /** @nullable */
+  ownerName?: string | null;
+  /** @nullable */
+  description?: string | null;
+}
+
+export interface Note {
+  id: number;
+  body: string;
+  /** @nullable */
+  accountId?: number | null;
+  /** @nullable */
+  dealId?: number | null;
+  createdAt: string;
+}
+
+export type AccountDetail = Account & {
+  contacts: Lead[];
+  deals: Deal[];
+  notes: Note[];
+  activity: Activity[];
+};
+
+export interface AccountsFromLeadsResult {
+  created: number;
+  linked: number;
+}
+
+export interface DealInput {
+  /** @minLength 1 */
+  name: string;
+  accountId?: number;
+  leadId?: number;
+  stage?: DealStage;
+  /** @minimum 0 */
+  amount?: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  probability?: number;
+  closeDate?: string;
+  ownerName?: string;
+  nextStep?: string;
+  description?: string;
+}
+
+export interface DealUpdate {
+  /** @minLength 1 */
+  name?: string;
+  /** @nullable */
+  accountId?: number | null;
+  /** @nullable */
+  leadId?: number | null;
+  stage?: DealStage;
+  /** @minimum 0 */
+  amount?: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  probability?: number;
+  /** @nullable */
+  closeDate?: string | null;
+  /** @nullable */
+  ownerName?: string | null;
+  /** @nullable */
+  nextStep?: string | null;
+  /** @nullable */
+  lostReason?: string | null;
+  /** @nullable */
+  description?: string | null;
+}
+
+export type DealDetail = Deal & {
+  notes: Note[];
+  tasks: Task[];
+  activity: Activity[];
+};
+
+export interface DealInsight {
+  summary: string;
+  risks: string[];
+  nextActions: string[];
+  /** 0-100 AI estimate */
+  winLikelihood: number;
+}
+
+export interface LeadConvertInput {
+  dealName?: string;
+  /** @minimum 0 */
+  amount?: number;
+  closeDate?: string;
+  stage?: DealStage;
+}
+
+export interface NoteInput {
+  /** @minLength 1 */
+  body: string;
+  accountId?: number;
+  dealId?: number;
+}
+
+export interface StageSummary {
+  stage: DealStage;
+  count: number;
+  amount: number;
+}
+
+export interface ForecastMonth {
+  /** YYYY-MM */
+  month: string;
+  weighted: number;
+  open: number;
+  won: number;
+}
+
+export interface TrendMonth {
+  month: string;
+  wonCount: number;
+  lostCount: number;
+  wonAmount: number;
+}
+
+export interface TopAccount {
+  id: number;
+  name: string;
+  wonValue: number;
+  pipelineValue: number;
+}
+
+export interface CrmReport {
+  currency: string;
+  openPipeline: number;
+  weightedPipeline: number;
+  openDeals: number;
+  wonThisMonth: number;
+  wonThisQuarter: number;
+  /** Won / (won + lost), 0-1 */
+  winRate: number;
+  avgDealSize: number;
+  avgCycleDays: number;
+  byStage: StageSummary[];
+  forecast: ForecastMonth[];
+  trend: TrendMonth[];
+  topAccounts: TopAccount[];
+}
+
+export type SearchHitKind = typeof SearchHitKind[keyof typeof SearchHitKind];
+
+
+export const SearchHitKind = {
+  lead: 'lead',
+  account: 'account',
+  deal: 'deal',
+} as const;
+
+export interface SearchHit {
+  kind: SearchHitKind;
+  id: number;
+  title: string;
+  /** @nullable */
+  subtitle?: string | null;
 }
 
 export type ListLeadsParams = {
@@ -774,5 +1095,22 @@ limit?: number;
 export type ListTasksParams = {
 done?: boolean;
 leadId?: number;
+dealId?: number;
+};
+
+export type ListAccountsParams = {
+search?: string;
+type?: AccountType;
+};
+
+export type ListDealsParams = {
+search?: string;
+stage?: DealStage;
+accountId?: number;
+leadId?: number;
+};
+
+export type GlobalSearchParams = {
+q: string;
 };
 

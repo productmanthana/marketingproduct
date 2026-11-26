@@ -17,6 +17,7 @@ tags:
   - name: settings
   - name: mailboxes
   - name: tasks
+  - name: crm
 paths:
   /healthz:
     get:
@@ -676,6 +677,7 @@ paths:
       parameters:
         - { name: done, in: query, required: false, schema: { type: boolean } }
         - { name: leadId, in: query, required: false, schema: { type: integer } }
+        - { name: dealId, in: query, required: false, schema: { type: integer } }
       responses:
         "200":
           description: Tasks
@@ -718,6 +720,215 @@ paths:
       tags: [tasks]
       responses:
         "204": { description: Deleted }
+
+  /accounts:
+    get:
+      operationId: listAccounts
+      tags: [crm]
+      parameters:
+        - { name: search, in: query, required: false, schema: { type: string } }
+        - { name: type, in: query, required: false, schema: { $ref: "#/components/schemas/AccountType" } }
+      responses:
+        "200":
+          description: Accounts
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Account" } }
+    post:
+      operationId: createAccount
+      tags: [crm]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccountInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+  /accounts/from-leads:
+    post:
+      operationId: createAccountsFromLeads
+      tags: [crm]
+      summary: Create accounts from lead company names and link every lead without an account
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountsFromLeadsResult" }
+  /accounts/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getAccount
+      tags: [crm]
+      responses:
+        "200":
+          description: Account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountDetail" }
+    patch:
+      operationId: updateAccount
+      tags: [crm]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccountUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+    delete:
+      operationId: deleteAccount
+      tags: [crm]
+      responses:
+        "204": { description: Deleted }
+
+  /deals:
+    get:
+      operationId: listDeals
+      tags: [crm]
+      parameters:
+        - { name: search, in: query, required: false, schema: { type: string } }
+        - { name: stage, in: query, required: false, schema: { $ref: "#/components/schemas/DealStage" } }
+        - { name: accountId, in: query, required: false, schema: { type: integer } }
+        - { name: leadId, in: query, required: false, schema: { type: integer } }
+      responses:
+        "200":
+          description: Deals
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Deal" } }
+    post:
+      operationId: createDeal
+      tags: [crm]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DealInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Deal" }
+  /deals/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: getDeal
+      tags: [crm]
+      responses:
+        "200":
+          description: Deal
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DealDetail" }
+    patch:
+      operationId: updateDeal
+      tags: [crm]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DealUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Deal" }
+    delete:
+      operationId: deleteDeal
+      tags: [crm]
+      responses:
+        "204": { description: Deleted }
+  /deals/{id}/insight:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: getDealInsight
+      tags: [crm]
+      summary: AI read of the deal with risks and next best actions
+      responses:
+        "200":
+          description: Insight
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DealInsight" }
+  /leads/{id}/convert:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: convertLead
+      tags: [crm]
+      summary: Turn a lead into a deal, creating or linking its account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeadConvertInput" }
+      responses:
+        "201":
+          description: Converted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Deal" }
+
+  /notes:
+    post:
+      operationId: createNote
+      tags: [crm]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NoteInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Note" }
+  /notes/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    delete:
+      operationId: deleteNote
+      tags: [crm]
+      responses:
+        "204": { description: Deleted }
+
+  /crm/report:
+    get:
+      operationId: getCrmReport
+      tags: [crm]
+      responses:
+        "200":
+          description: Pipeline and revenue report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CrmReport" }
+  /search:
+    get:
+      operationId: globalSearch
+      tags: [crm]
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Matches across leads, accounts and deals
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/SearchHit" } }
 
   /settings:
     get:
@@ -787,6 +998,8 @@ components:
         status: { $ref: "#/components/schemas/LeadStatus" }
         campaignId: { type: ["integer", "null"] }
         campaignName: { type: ["string", "null"] }
+        accountId: { type: ["integer", "null"] }
+        accountName: { type: ["string", "null"] }
         currentStep: { type: integer }
         notes: { type: ["string", "null"] }
         website: { type: ["string", "null"] }
@@ -848,8 +1061,9 @@ components:
       allOf:
         - $ref: "#/components/schemas/Lead"
         - type: object
-          required: [conversations, calls, activity, tasks]
+          required: [conversations, calls, activity, tasks, deals]
           properties:
+            deals: { type: array, items: { $ref: "#/components/schemas/Deal" } }
             conversations: { type: array, items: { $ref: "#/components/schemas/Conversation" } }
             calls: { type: array, items: { $ref: "#/components/schemas/Call" } }
             activity: { type: array, items: { $ref: "#/components/schemas/Activity" } }
@@ -884,6 +1098,7 @@ components:
         notes: { type: string }
         status: { $ref: "#/components/schemas/LeadStatus" }
         campaignId: { type: ["integer", "null"] }
+        accountId: { type: ["integer", "null"] }
     LeadImportInput:
       type: object
       required: [leads]
@@ -1158,11 +1373,13 @@ components:
       required: [id, type, description, createdAt]
       properties:
         id: { type: integer }
-        type: { type: string, enum: [message_sent, reply_received, ai_reply, call_scheduled, call_completed, status_change, lead_added, campaign_run, task_created, lead_qualified, lead_enriched, email_opened, unsubscribed, delivery_failed] }
+        type: { type: string, enum: [message_sent, reply_received, ai_reply, call_scheduled, call_completed, status_change, lead_added, campaign_run, task_created, lead_qualified, lead_enriched, email_opened, unsubscribed, delivery_failed, deal_created, deal_stage_changed, deal_won, deal_lost, note_added, account_created] }
         description: { type: string }
         channel: { oneOf: [{ $ref: "#/components/schemas/Channel" }, { type: "null" }] }
         leadId: { type: ["integer", "null"] }
         leadName: { type: ["string", "null"] }
+        accountId: { type: ["integer", "null"] }
+        dealId: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
 
     Settings:
@@ -1191,6 +1408,7 @@ components:
         voicePhoneNumberId: { type: string }
         voiceName: { type: string }
         voiceConnected: { type: boolean }
+        currency: { type: string, description: "ISO 4217 code used for deal amounts" }
     SettingsInput:
       type: object
       properties:
@@ -1216,6 +1434,7 @@ components:
         voiceApiKey: { type: string, description: "Write-only; empty keeps the stored key" }
         voicePhoneNumberId: { type: string }
         voiceName: { type: string }
+        currency: { type: string, minLength: 3, maxLength: 3 }
 
     Mailbox:
       type: object
@@ -1311,6 +1530,8 @@ components:
         id: { type: integer }
         leadId: { type: ["integer", "null"] }
         leadName: { type: ["string", "null"] }
+        dealId: { type: ["integer", "null"] }
+        dealName: { type: ["string", "null"] }
         title: { type: string }
         dueAt: { type: ["string", "null"], format: date-time }
         done: { type: boolean }
@@ -1322,6 +1543,7 @@ components:
       properties:
         title: { type: string, minLength: 1 }
         leadId: { type: integer }
+        dealId: { type: integer }
         dueAt: { type: string, format: date-time }
     TaskUpdate:
       type: object
@@ -1329,3 +1551,226 @@ components:
         title: { type: string }
         dueAt: { type: ["string", "null"], format: date-time }
         done: { type: boolean }
+
+    DealStage:
+      type: string
+      enum: [prospecting, qualification, proposal, negotiation, closed_won, closed_lost]
+    AccountType:
+      type: string
+      enum: [prospect, customer, partner, churned]
+    Account:
+      type: object
+      required: [id, name, type, createdAt, contactCount, openDealCount, pipelineValue, wonValue]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        website: { type: ["string", "null"] }
+        industry: { type: ["string", "null"] }
+        size: { type: ["string", "null"] }
+        location: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        linkedinUrl: { type: ["string", "null"] }
+        type: { $ref: "#/components/schemas/AccountType" }
+        annualRevenue: { type: ["integer", "null"] }
+        ownerName: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        contactCount: { type: integer }
+        openDealCount: { type: integer }
+        pipelineValue: { type: integer, description: "Sum of open deal amounts" }
+        wonValue: { type: integer }
+    AccountInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        website: { type: string }
+        industry: { type: string }
+        size: { type: string }
+        location: { type: string }
+        phone: { type: string }
+        linkedinUrl: { type: string }
+        type: { $ref: "#/components/schemas/AccountType" }
+        annualRevenue: { type: integer }
+        ownerName: { type: string }
+        description: { type: string }
+    AccountUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        website: { type: ["string", "null"] }
+        industry: { type: ["string", "null"] }
+        size: { type: ["string", "null"] }
+        location: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        linkedinUrl: { type: ["string", "null"] }
+        type: { $ref: "#/components/schemas/AccountType" }
+        annualRevenue: { type: ["integer", "null"] }
+        ownerName: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+    AccountDetail:
+      allOf:
+        - $ref: "#/components/schemas/Account"
+        - type: object
+          required: [contacts, deals, notes, activity]
+          properties:
+            contacts: { type: array, items: { $ref: "#/components/schemas/Lead" } }
+            deals: { type: array, items: { $ref: "#/components/schemas/Deal" } }
+            notes: { type: array, items: { $ref: "#/components/schemas/Note" } }
+            activity: { type: array, items: { $ref: "#/components/schemas/Activity" } }
+    AccountsFromLeadsResult:
+      type: object
+      required: [created, linked]
+      properties:
+        created: { type: integer }
+        linked: { type: integer }
+
+    Deal:
+      type: object
+      required: [id, name, stage, amount, probability, source, stageChangedAt, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        accountId: { type: ["integer", "null"] }
+        accountName: { type: ["string", "null"] }
+        leadId: { type: ["integer", "null"] }
+        leadName: { type: ["string", "null"] }
+        stage: { $ref: "#/components/schemas/DealStage" }
+        amount: { type: integer }
+        probability: { type: integer, description: "0-100 chance to close" }
+        closeDate: { type: ["string", "null"], format: date-time }
+        ownerName: { type: ["string", "null"] }
+        nextStep: { type: ["string", "null"] }
+        lostReason: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+        source: { type: string, enum: [manual, lead_conversion, meeting_booked] }
+        stageChangedAt: { type: string, format: date-time }
+        closedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DealInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        accountId: { type: integer }
+        leadId: { type: integer }
+        stage: { $ref: "#/components/schemas/DealStage" }
+        amount: { type: integer, minimum: 0 }
+        probability: { type: integer, minimum: 0, maximum: 100 }
+        closeDate: { type: string, format: date-time }
+        ownerName: { type: string }
+        nextStep: { type: string }
+        description: { type: string }
+    DealUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        accountId: { type: ["integer", "null"] }
+        leadId: { type: ["integer", "null"] }
+        stage: { $ref: "#/components/schemas/DealStage" }
+        amount: { type: integer, minimum: 0 }
+        probability: { type: integer, minimum: 0, maximum: 100 }
+        closeDate: { type: ["string", "null"], format: date-time }
+        ownerName: { type: ["string", "null"] }
+        nextStep: { type: ["string", "null"] }
+        lostReason: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+    DealDetail:
+      allOf:
+        - $ref: "#/components/schemas/Deal"
+        - type: object
+          required: [notes, tasks, activity]
+          properties:
+            notes: { type: array, items: { $ref: "#/components/schemas/Note" } }
+            tasks: { type: array, items: { $ref: "#/components/schemas/Task" } }
+            activity: { type: array, items: { $ref: "#/components/schemas/Activity" } }
+    DealInsight:
+      type: object
+      required: [summary, risks, nextActions, winLikelihood]
+      properties:
+        summary: { type: string }
+        risks: { type: array, items: { type: string } }
+        nextActions: { type: array, items: { type: string } }
+        winLikelihood: { type: integer, description: "0-100 AI estimate" }
+    LeadConvertInput:
+      type: object
+      properties:
+        dealName: { type: string }
+        amount: { type: integer, minimum: 0 }
+        closeDate: { type: string, format: date-time }
+        stage: { $ref: "#/components/schemas/DealStage" }
+
+    Note:
+      type: object
+      required: [id, body, createdAt]
+      properties:
+        id: { type: integer }
+        body: { type: string }
+        accountId: { type: ["integer", "null"] }
+        dealId: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+    NoteInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1 }
+        accountId: { type: integer }
+        dealId: { type: integer }
+
+    StageSummary:
+      type: object
+      required: [stage, count, amount]
+      properties:
+        stage: { $ref: "#/components/schemas/DealStage" }
+        count: { type: integer }
+        amount: { type: integer }
+    ForecastMonth:
+      type: object
+      required: [month, weighted, open, won]
+      properties:
+        month: { type: string, description: "YYYY-MM" }
+        weighted: { type: integer }
+        open: { type: integer }
+        won: { type: integer }
+    TrendMonth:
+      type: object
+      required: [month, wonCount, lostCount, wonAmount]
+      properties:
+        month: { type: string }
+        wonCount: { type: integer }
+        lostCount: { type: integer }
+        wonAmount: { type: integer }
+    TopAccount:
+      type: object
+      required: [id, name, wonValue, pipelineValue]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        wonValue: { type: integer }
+        pipelineValue: { type: integer }
+    CrmReport:
+      type: object
+      required: [currency, openPipeline, weightedPipeline, openDeals, wonThisMonth, wonThisQuarter, winRate, avgDealSize, avgCycleDays, byStage, forecast, trend, topAccounts]
+      properties:
+        currency: { type: string }
+        openPipeline: { type: integer }
+        weightedPipeline: { type: integer }
+        openDeals: { type: integer }
+        wonThisMonth: { type: integer }
+        wonThisQuarter: { type: integer }
+        winRate: { type: number, description: "Won / (won + lost), 0-1" }
+        avgDealSize: { type: integer }
+        avgCycleDays: { type: integer }
+        byStage: { type: array, items: { $ref: "#/components/schemas/StageSummary" } }
+        forecast: { type: array, items: { $ref: "#/components/schemas/ForecastMonth" } }
+        trend: { type: array, items: { $ref: "#/components/schemas/TrendMonth" } }
+        topAccounts: { type: array, items: { $ref: "#/components/schemas/TopAccount" } }
+    SearchHit:
+      type: object
+      required: [kind, id, title]
+      properties:
+        kind: { type: string, enum: [lead, account, deal] }
+        id: { type: integer }
+        title: { type: string }
+        subtitle: { type: ["string", "null"] }

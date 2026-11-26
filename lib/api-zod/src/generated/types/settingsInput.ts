@@ -39,4 +39,9 @@ export interface SettingsInput {
   voiceApiKey?: string;
   voicePhoneNumberId?: string;
   voiceName?: string;
+  /**
+     * @minLength 3
+     * @maxLength 3
+     */
+  currency?: string;
 }

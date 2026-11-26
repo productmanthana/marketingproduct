@@ -4,6 +4,7 @@ import {
   db,
   activitiesTable,
   callsTable,
+  dealsTable,
   leadsTable,
   outreachConversationsTable,
   tasksTable,
@@ -30,6 +31,7 @@ import { qualifyLead, researchCompany } from "../lib/ai";
 import { serializeTasks } from "./tasks";
 import { apolloKey, enrichOrganization } from "../lib/apollo";
 import { logger } from "../lib/logger";
+import { ensureDealForBookedLead, serializeDeals } from "../lib/crm";
 import {
   getSettings,
   leadName,
@@ -272,6 +274,7 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
     .orderBy(desc(activitiesTable.createdAt))
     .limit(50);
   const tasks = await db.select().from(tasksTable).where(eq(tasksTable.leadId, lead.id)).orderBy(asc(tasksTable.done), desc(tasksTable.createdAt));
+  const deals = await db.select().from(dealsTable).where(eq(dealsTable.leadId, lead.id)).orderBy(desc(dealsTable.createdAt));
   res.json(
     GetLeadResponse.parse({
       ...base,
@@ -279,6 +282,7 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
       calls: await serializeCalls(calls),
       activity: activity.map((a) => ({ ...a, leadName: leadName(lead) })),
       tasks: await serializeTasks(tasks),
+      deals: await serializeDeals(deals),
     }),
   );
 });
@@ -312,6 +316,7 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
       description: `${leadName(lead!)} marked ${parsed.data.status.replace("_", " ")}`,
       leadId: lead!.id,
     });
+    if (parsed.data.status === "meeting_booked") await ensureDealForBookedLead(lead!.id);
   }
   const [out] = await serializeLeads([lead!]);
   res.json(UpdateLeadResponse.parse(out));

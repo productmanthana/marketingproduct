@@ -24,4 +24,10 @@ export const ActivityType = {
   email_opened: 'email_opened',
   unsubscribed: 'unsubscribed',
   delivery_failed: 'delivery_failed',
+  deal_created: 'deal_created',
+  deal_stage_changed: 'deal_stage_changed',
+  deal_won: 'deal_won',
+  deal_lost: 'deal_lost',
+  note_added: 'note_added',
+  account_created: 'account_created',
 } as const;

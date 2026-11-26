@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   db,
+  accountsTable,
   activitiesTable,
   callsTable,
   campaignsTable,
@@ -20,6 +21,7 @@ import { batchProcess } from "@workspace/integrations-openai-ai-server/batch";
 import { analyzeAndDraftReply, personalizeMessage } from "./ai";
 import { hasEmailCapacity, linkedinQuotaLeft, sendEmail, sendLinkedIn, unipileConfigured } from "./delivery";
 import { logger } from "./logger";
+import { ensureDealForBookedLead } from "./crm";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Leads in these statuses still receive automated sequence steps. */
@@ -68,12 +70,12 @@ export function withinSendWindow(s: SettingsRow, now = new Date()): boolean {
 
 // ---------- tasks ----------
 
-export async function createTask(entry: { title: string; leadId?: number | null; dueAt?: Date | null; source: string }) {
+export async function createTask(entry: { title: string; leadId?: number | null; dealId?: number | null; dueAt?: Date | null; source: string }) {
   const [task] = await db
     .insert(tasksTable)
-    .values({ title: entry.title, leadId: entry.leadId ?? null, dueAt: entry.dueAt ?? null, source: entry.source })
+    .values({ title: entry.title, leadId: entry.leadId ?? null, dealId: entry.dealId ?? null, dueAt: entry.dueAt ?? null, source: entry.source })
     .returning();
-  await logActivity({ type: "task_created", description: `Task: ${entry.title}`, leadId: entry.leadId ?? null });
+  await logActivity({ type: "task_created", description: `Task: ${entry.title}`, leadId: entry.leadId ?? null, dealId: entry.dealId ?? null });
   return task!;
 }
 
@@ -84,12 +86,16 @@ export async function logActivity(entry: {
   description: string;
   channel?: string | null;
   leadId?: number | null;
+  accountId?: number | null;
+  dealId?: number | null;
 }): Promise<void> {
   await db.insert(activitiesTable).values({
     type: entry.type,
     description: entry.description,
     channel: entry.channel ?? null,
     leadId: entry.leadId ?? null,
+    accountId: entry.accountId ?? null,
+    dealId: entry.dealId ?? null,
   });
 }
 
@@ -105,9 +111,15 @@ export async function serializeLeads(leads: LeadRow[]) {
     ? await db.select().from(campaignsTable).where(inArray(campaignsTable.id, campaignIds))
     : [];
   const names = new Map(campaigns.map((c) => [c.id, c.name]));
+  const accountIds = [...new Set(leads.map((l) => l.accountId).filter((x): x is number => x != null))];
+  const accounts = accountIds.length
+    ? await db.select({ id: accountsTable.id, name: accountsTable.name }).from(accountsTable).where(inArray(accountsTable.id, accountIds))
+    : [];
+  const accountNames = new Map(accounts.map((a) => [a.id, a.name]));
   return leads.map((l) => ({
     ...l,
     campaignName: l.campaignId != null ? (names.get(l.campaignId) ?? null) : null,
+    accountName: l.accountId != null ? (accountNames.get(l.accountId) ?? null) : null,
   }));
 }
 
@@ -401,6 +413,9 @@ export async function processInbound(
     .update(leadsTable)
     .set({ status: analysis.leadStatus })
     .where(eq(leadsTable.id, lead.id));
+  if (analysis.leadStatus === "meeting_booked" && lead.status !== "meeting_booked") {
+    await ensureDealForBookedLead(lead.id).catch((err) => logger.error({ err }, "Could not open a deal for booked lead"));
+  }
 
   const autoEnabled = settings.globalAutoReply && (campaign?.autoReply ?? false);
   const risky =

@@ -28,6 +28,10 @@ export interface Lead {
   campaignId?: number | null;
   /** @nullable */
   campaignName?: string | null;
+  /** @nullable */
+  accountId?: number | null;
+  /** @nullable */
+  accountName?: string | null;
   currentStep?: number;
   /** @nullable */
   notes?: string | null;

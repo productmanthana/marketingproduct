@@ -55,6 +55,10 @@ const TONES: Record<string, string> = {
   objection: "bg-[hsl(var(--ch-call)/.15)] text-[hsl(36_80%_32%)]",
   out_of_office: "bg-muted text-muted-foreground",
   unsubscribe: "bg-destructive/10 text-destructive",
+  prospect: "bg-[hsl(var(--ch-email)/.1)] text-[hsl(var(--ch-email))]",
+  customer: "bg-[hsl(var(--ch-linkedin)/.14)] text-[hsl(var(--ch-linkedin))]",
+  partner: "bg-accent text-accent-foreground",
+  churned: "bg-muted text-muted-foreground",
 };
 export const label = (s: string) => s.replace(/_/g, " ");
 

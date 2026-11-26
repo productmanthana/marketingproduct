@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PageHeader, Panel, Rows, ErrorBox, TONE_OPTIONS, useRefreshAll } from "@/components/bits";
 import { MailboxesPanel } from "@/components/settings/mailboxes";
 import { LinkedinPanel, VoicePanel, WebhooksPanel, type IntegrationForm } from "@/components/settings/integrations";
+import { CURRENCIES } from "@/components/crm/format";
 
 type Form = Required<Omit<Settings, "unipileConnected" | "voiceConnected">> & { unipileApiKey: string; voiceApiKey: string };
 
@@ -21,7 +22,7 @@ const TIMEZONES = (() => {
 const EMPTY: Form = {
   senderName: "", companyName: "", signature: "", defaultTone: "friendly", globalAutoReply: true, escalateNegative: true,
   icpDescription: "", publicBaseUrl: "", trackOpens: true, unsubscribeFooter: true, sendWindowStart: 8, sendWindowEnd: 18, sendWeekdaysOnly: true, timezone: "UTC",
-  unipileDsn: "", unipileApiKey: "", unipileAccountId: "", linkedinDailyLimit: 25, voiceApiBaseUrl: "https://api.vapi.ai", voiceApiKey: "", voicePhoneNumberId: "", voiceName: "",
+  unipileDsn: "", unipileApiKey: "", unipileAccountId: "", linkedinDailyLimit: 25, voiceApiBaseUrl: "https://api.vapi.ai", voiceApiKey: "", voicePhoneNumberId: "", voiceName: "", currency: "USD",
 };
 
 export default function SettingsPage() {
@@ -70,6 +71,10 @@ export default function SettingsPage() {
                   <div><Label className="text-xs">Sender name</Label><Input value={f.senderName} onChange={(e) => set("senderName", e.target.value)} data-testid="input-sender-name" /></div>
                   <div><Label className="text-xs">Company</Label><Input value={f.companyName} onChange={(e) => set("companyName", e.target.value)} data-testid="input-company-name" /></div>
                 </div>
+                <div><Label className="text-xs">CRM currency (deal amounts and reports)</Label>
+                  <select className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm" value={f.currency} onChange={(e) => set("currency", e.target.value)} data-testid="select-currency">
+                    {Array.from(new Set([...CURRENCIES, f.currency])).map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select></div>
                 <div><Label className="text-xs">Default tone</Label>
                   <div className="mt-1 flex flex-wrap gap-1.5">{Array.from(new Set([...TONE_OPTIONS, f.defaultTone])).map((t) => (
                     <button key={t} onClick={() => set("defaultTone", t)} data-testid={`button-tone-${t}`}

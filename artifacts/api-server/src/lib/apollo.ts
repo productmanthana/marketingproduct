@@ -17,7 +17,7 @@ export class ApolloError extends Error {
 }
 
 export function apolloKey(): string | null {
-  return process.env["Apollo_api_key"] || process.env["APOLLO_API_KEY"] || null;
+  return process.env["Apollo_api_key"] || process.env["APOLLO_API_KEY"] || process.env["apollo_api_key"] || null;
 }
 
 async function apolloFetch<T>(path: string, init: { method: "GET" | "POST"; body?: unknown }): Promise<T> {

@@ -17,5 +17,9 @@ export interface Activity {
   leadId?: number | null;
   /** @nullable */
   leadName?: string | null;
+  /** @nullable */
+  accountId?: number | null;
+  /** @nullable */
+  dealId?: number | null;
   createdAt: Date;
 }

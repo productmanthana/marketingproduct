@@ -32,4 +32,6 @@ export interface Settings {
   voicePhoneNumberId?: string;
   voiceName?: string;
   voiceConnected?: boolean;
+  /** ISO 4217 code used for deal amounts */
+  currency?: string;
 }

@@ -21,4 +21,6 @@ export interface LeadUpdate {
   status?: LeadStatus;
   /** @nullable */
   campaignId?: number | null;
+  /** @nullable */
+  accountId?: number | null;
 }

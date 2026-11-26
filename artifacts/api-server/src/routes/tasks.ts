@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, asc, desc, eq, inArray, type SQL } from "drizzle-orm";
-import { db, leadsTable, tasksTable, type TaskRow } from "@workspace/db";
+import { db, dealsTable, leadsTable, tasksTable, type TaskRow } from "@workspace/db";
 import {
   CreateTaskBody,
   DeleteTaskParams,
@@ -17,9 +17,11 @@ const router: IRouter = Router();
 export async function serializeTasks(tasks: TaskRow[]) {
   const ids = [...new Set(tasks.map((t) => t.leadId).filter((x): x is number => x != null))];
   const leads = ids.length ? await db.select().from(leadsTable).where(inArray(leadsTable.id, ids)) : [];
+  const dealIds = [...new Set(tasks.map((t) => t.dealId).filter((x): x is number => x != null))];
+  const deals = dealIds.length ? await db.select({ id: dealsTable.id, name: dealsTable.name }).from(dealsTable).where(inArray(dealsTable.id, dealIds)) : [];
   return tasks.map((t) => {
     const lead = leads.find((l) => l.id === t.leadId);
-    return { ...t, leadName: lead ? leadName(lead) : null };
+    return { ...t, leadName: lead ? leadName(lead) : null, dealName: deals.find((d) => d.id === t.dealId)?.name ?? null };
   });
 }
 
@@ -33,6 +35,7 @@ router.get("/tasks", async (req, res): Promise<void> => {
   // z.coerce.boolean() turns the string "false" into true, so read the flag from the raw query string.
   if (q.data.done !== undefined) conds.push(eq(tasksTable.done, String(req.query.done) === "true"));
   if (q.data.leadId) conds.push(eq(tasksTable.leadId, q.data.leadId));
+  if (q.data.dealId) conds.push(eq(tasksTable.dealId, q.data.dealId));
   const rows = await db
     .select()
     .from(tasksTable)
@@ -50,6 +53,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
   const task = await createTask({
     title: parsed.data.title,
     leadId: parsed.data.leadId ?? null,
+    dealId: parsed.data.dealId ?? null,
     dueAt: parsed.data.dueAt ? new Date(parsed.data.dueAt) : null,
     source: "manual",
   });

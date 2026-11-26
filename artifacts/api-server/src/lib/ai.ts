@@ -221,3 +221,41 @@ export function voiceAgentPrompt(args: {
     .filter(Boolean)
     .join("\n\n");
 }
+
+export async function dealInsight(args: {
+  deal: { name: string; stage: string; amount: number; probability: number; closeDate: Date | null; nextStep: string | null; description: string | null; createdAt: Date; stageChangedAt: Date };
+  currency: string;
+  accountName: string | null;
+  lead: LeadRow | null;
+  notes: string[];
+  activity: string[];
+  settings: SettingsRow;
+}): Promise<{ summary: string; risks: string[]; nextActions: string[]; winLikelihood: number }> {
+  const d = args.deal;
+  const days = (from: Date) => Math.round((Date.now() - from.getTime()) / 86_400_000);
+  const result = await jsonCompletion<{ summary: string; risks?: string[]; nextActions?: string[]; winLikelihood?: number }>(
+    `You are a sales manager reviewing one B2B opportunity. Using only the facts given, return: summary (2 sentences on where the deal stands), risks (0-3 short, specific risks such as a stale stage, missing close date, no recent contact, no decision maker), nextActions (2-3 concrete next steps the rep should take this week), winLikelihood (0-100). Respond as JSON: {"summary": string, "risks": string[], "nextActions": string[], "winLikelihood": number}.`,
+    [
+      `Today: ${new Date().toISOString().slice(0, 10)}`,
+      `Seller: ${args.settings.companyName}`,
+      `Deal: ${d.name}`,
+      `Stage: ${d.stage} (for ${days(d.stageChangedAt)} days), open ${days(d.createdAt)} days`,
+      `Amount: ${d.amount} ${args.currency}, rep probability ${d.probability}%`,
+      `Close date: ${d.closeDate ? d.closeDate.toISOString().slice(0, 10) : "not set"}`,
+      d.nextStep && `Next step: ${d.nextStep}`,
+      d.description && `Description: ${d.description}`,
+      args.accountName && `Account: ${args.accountName}`,
+      args.lead && `Primary contact:\n${leadProfile(args.lead)}\nLead status: ${args.lead.status}`,
+      args.notes.length && `Notes:\n${args.notes.join("\n")}`,
+      args.activity.length && `Recent activity (newest first):\n${args.activity.join("\n")}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+  return {
+    summary: result.summary,
+    risks: (result.risks ?? []).slice(0, 3),
+    nextActions: (result.nextActions ?? []).slice(0, 3),
+    winLikelihood: Math.max(0, Math.min(100, Math.round(Number(result.winLikelihood) || 0))),
+  };
+}

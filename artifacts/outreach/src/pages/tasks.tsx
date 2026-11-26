@@ -12,7 +12,7 @@ import { PageHeader, Rows, ErrorBox, Empty, ago, label, useRefreshAll } from "@/
 
 const VIEWS = [["open", "Open"], ["done", "Done"], ["all", "All"]] as const;
 
-export function TaskRow({ t, showLead = true }: { t: Task; showLead?: boolean }) {
+export function TaskRow({ t, showLead = true, showDeal = true }: { t: Task; showLead?: boolean; showDeal?: boolean }) {
   const upd = useUpdateTask();
   const del = useDeleteTask();
   const refresh = useRefreshAll();
@@ -24,6 +24,7 @@ export function TaskRow({ t, showLead = true }: { t: Task; showLead?: boolean })
         <div className={cn("text-sm", t.done && "text-muted-foreground line-through")}>{t.title}</div>
         <div className="flex gap-2 font-mono text-[10px] text-muted-foreground">
           {showLead && t.leadId && <Link href={`/leads/${t.leadId}`} className="hover:text-primary">{t.leadName}</Link>}
+          {showDeal && t.dealId && <Link href={`/deals/${t.dealId}`} className="hover:text-primary">{t.dealName}</Link>}
           <span>{label(t.source)}</span>
           {t.dueAt && <span className={overdue ? "text-destructive" : ""}>due {ago(t.dueAt)}</span>}
         </div>
@@ -34,7 +35,7 @@ export function TaskRow({ t, showLead = true }: { t: Task; showLead?: boolean })
   );
 }
 
-export function AddTask({ leadId }: { leadId?: number }) {
+export function AddTask({ leadId, dealId }: { leadId?: number; dealId?: number }) {
   const create = useCreateTask();
   const leads = useListLeads();
   const refresh = useRefreshAll();
@@ -42,12 +43,12 @@ export function AddTask({ leadId }: { leadId?: number }) {
   const [title, setTitle] = useState("");
   const [lead, setLead] = useState("");
   const [due, setDue] = useState("");
-  const submit = () => create.mutate({ data: { title, leadId: leadId ?? (lead ? Number(lead) : undefined), dueAt: due ? new Date(due).toISOString() : undefined } },
+  const submit = () => create.mutate({ data: { title, leadId: leadId ?? (lead ? Number(lead) : undefined), dealId, dueAt: due ? new Date(due).toISOString() : undefined } },
     { onSuccess: () => { setTitle(""); setDue(""); refresh(); toast({ title: "Task added" }); } });
   return (
     <div className="flex flex-wrap gap-2 border-b border-border p-3">
       <Input className="min-w-[200px] flex-1" placeholder="Add a task..." value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && title.trim() && submit()} data-testid="input-task-title" />
-      {!leadId && (
+      {!leadId && !dealId && (
         <select className="h-9 rounded-md border border-input bg-card px-2 text-sm" value={lead} onChange={(e) => setLead(e.target.value)} data-testid="select-task-lead">
           <option value="">No lead</option>{leads.data?.map((l) => <option key={l.id} value={l.id}>{l.firstName} {l.lastName}</option>)}
         </select>

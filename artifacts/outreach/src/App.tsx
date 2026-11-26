@@ -16,6 +16,11 @@ import Inbox from '@/pages/inbox';
 import Calls from '@/pages/calls';
 import SettingsPage from '@/pages/settings';
 import Tasks from '@/pages/tasks';
+import Pipeline from '@/pages/pipeline';
+import DealDetail from '@/pages/deal-detail';
+import Accounts from '@/pages/accounts';
+import AccountDetail from '@/pages/account-detail';
+import Reports from '@/pages/reports';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000, refetchOnWindowFocus: false } } });
 
@@ -33,6 +38,11 @@ function Router() {
           <Route path="/inbox" component={Inbox} />
           <Route path="/calls" component={Calls} />
           <Route path="/tasks" component={Tasks} />
+          <Route path="/pipeline" component={Pipeline} />
+          <Route path="/deals/:id" component={DealDetail} />
+          <Route path="/accounts" component={Accounts} />
+          <Route path="/accounts/:id" component={AccountDetail} />
+          <Route path="/reports" component={Reports} />
           <Route path="/settings" component={SettingsPage} />
           <Route component={NotFound} />
         </Switch>

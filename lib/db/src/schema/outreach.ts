@@ -47,6 +47,8 @@ export const leadsTable = pgTable("leads", {
   campaignId: integer("campaign_id").references(() => campaignsTable.id, {
     onDelete: "set null",
   }),
+  /** CRM account (company) this lead is a contact of. No FK to avoid a schema import cycle; cleared on account delete. */
+  accountId: integer("account_id"),
   currentStep: integer("current_step").notNull().default(0),
   nextStepAt: timestamp("next_step_at", { withTimezone: true }),
   notes: text("notes"),
@@ -129,6 +131,8 @@ export const activitiesTable = pgTable("activities", {
   description: text("description").notNull(),
   channel: text("channel"),
   leadId: integer("lead_id").references(() => leadsTable.id, { onDelete: "set null" }),
+  accountId: integer("account_id"),
+  dealId: integer("deal_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -156,6 +160,7 @@ export const settingsTable = pgTable("settings", {
   voiceApiKey: text("voice_api_key").notNull().default(""),
   voicePhoneNumberId: text("voice_phone_number_id").notNull().default(""),
   voiceName: text("voice_name").notNull().default(""),
+  currency: text("currency").notNull().default("USD"),
 });
 
 export const mailboxesTable = pgTable("mailboxes", {
@@ -193,6 +198,7 @@ export const tasksTable = pgTable("tasks", {
   dueAt: timestamp("due_at", { withTimezone: true }),
   done: boolean("done").notNull().default(false),
   source: text("source").notNull().default("manual"),
+  dealId: integer("deal_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
