@@ -1,7 +1,7 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
-import { ArrowDown, ArrowUp, Check, ChevronLeft, Pause, Play, Eye, Pencil, Plus, Rocket, RotateCcw, Sparkles, Trash2, UserPlus, Users, Workflow } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronLeft, Pause, Play, Eye, Pencil, Plus, Rocket, RotateCcw, Sparkles, Trash2, UserPlus, Users, Workflow } from "lucide-react";
 import {
   useGetCampaign, useUpdateCampaign, useDeleteCampaign, useAddSequenceStep, useUpdateSequenceStep, useDeleteSequenceStep,
   useEnrollLeads, useGenerateCampaignSequence, useRunCampaign, useListLeads, usePreviewSequenceStep,
@@ -19,6 +19,16 @@ import { useToast } from "@/hooks/use-toast";
 import { PageHeader, Panel, Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, useRefreshAll, CH, chColor, TONE_OPTIONS, ago, errMsg, type Ch } from "@/components/bits";
 
 const STATE_LABEL: Record<string, string> = { draft: "Not started", active: "Sending", paused: "Paused", completed: "Finished" };
+
+function WizardNav({ onBack, onNext, nextLabel = "Next", nextDisabled, hint }: { onBack?: () => void; onNext?: () => void; nextLabel?: string; nextDisabled?: boolean; hint?: string | null }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t border-border bg-muted/30 p-4" data-testid="wizard-nav">
+      {onBack && <Button variant="outline" size="lg" onClick={onBack} data-testid="button-wizard-back"><ArrowLeft className="mr-1.5 h-4 w-4" />Back</Button>}
+      {hint && <span className="text-sm text-muted-foreground" data-testid="text-wizard-hint">{hint}</span>}
+      {onNext && <Button size="lg" className="ml-auto" disabled={nextDisabled} onClick={onNext} data-testid="button-wizard-next">{nextLabel}<ArrowRight className="ml-1.5 h-4 w-4" /></Button>}
+    </div>
+  );
+}
 
 function FlowSection({ n, title, hint, done, action, children }: { n: number; title: string; hint: string; done: boolean; action?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -52,13 +62,14 @@ export default function CampaignDetail() {
   const [stepEdit, setStepEdit] = useState<SequenceStep | "new" | null>(null);
   const [enroll, setEnroll] = useState(false);
   const [preview, setPreview] = useState<SequenceStep | null>(null);
+  const [active, setActive] = useState<number | null>(null);
   const c = q.data;
 
   if (q.isLoading) return <div className="p-8"><Rows n={6} h={70} /></div>;
   if (q.isError || !c) return <ErrorBox onRetry={() => q.refetch()} />;
 
-  const patch = (data: Parameters<typeof update.mutate>[0]["data"], msg = "Saved") =>
-    update.mutate({ id, data }, { onSuccess: () => { refresh(); toast({ title: msg }); } });
+  const patch = (data: Parameters<typeof update.mutate>[0]["data"], msg = "Saved", onDone?: () => void) =>
+    update.mutate({ id, data }, { onSuccess: () => { refresh(); toast({ title: msg }); onDone?.(); } });
 
   const steps = [...c.steps].sort((a, b) => a.stepOrder - b.stepOrder);
   const offerDone = (c.productPitch ?? "").trim().length >= 20;
@@ -70,6 +81,8 @@ export default function CampaignDetail() {
     { n: 4, label: "Start sending", done: started },
   ];
   const missing = !offerDone ? "Finish step 1: describe what you're offering." : !steps.length ? "Finish step 2: add at least one message." : !c.leads.length ? "Finish step 3: add the people who should receive it." : null;
+  const cur = active ?? (flow.find((f) => !f.done)?.n ?? 4);
+  const go = (n: number) => { setActive(n); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const firstCh = steps[0]?.channel as Ch | undefined;
   const runIt = () => run.mutate({ id }, {
     onSuccess: (r) => { setResult(r); refresh(); toast({ title: r.messagesSent || r.callsScheduled ? "Sent!" : "Nothing new to send right now", description: `${r.messagesSent} messages sent, ${r.callsScheduled} calls added to your call list` }); },
@@ -86,16 +99,23 @@ export default function CampaignDetail() {
       </PageHeader>
 
       <div className="mx-auto max-w-4xl space-y-5 p-6 md:p-8">
-        <ol className="grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="flow-progress">
-          {flow.map((f) => (
-            <li key={f.n}>
-              <a href={`#step-${f.n}`} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${f.done ? "border-[hsl(var(--ch-linkedin)/.4)] bg-[hsl(var(--ch-linkedin)/.08)]" : "border-border bg-card hover:border-primary/40"}`}>
-                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold ${f.done ? "bg-[hsl(var(--ch-linkedin))] text-white" : "bg-muted text-muted-foreground"}`}>{f.done ? <Check className="h-3.5 w-3.5" /> : f.n}</span>
-                <span className={f.done ? "font-medium" : "text-muted-foreground"}>{f.label}</span>
-              </a>
-            </li>
-          ))}
-        </ol>
+        <div>
+          <p className="mb-2 text-sm font-medium text-muted-foreground" data-testid="text-step-of">Step {cur} of 4</p>
+          <ol className="grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="flow-progress">
+            {flow.map((f) => {
+              const on = f.n === cur;
+              return (
+                <li key={f.n}>
+                  <button type="button" onClick={() => go(f.n)} aria-current={on ? "step" : undefined} data-testid={`button-goto-step-${f.n}`}
+                    className={`flex w-full items-center gap-2 rounded-lg border-2 px-3 py-2.5 text-left text-sm transition-colors ${on ? "border-primary bg-primary/5" : f.done ? "border-[hsl(var(--ch-linkedin)/.4)] bg-[hsl(var(--ch-linkedin)/.08)] hover:border-[hsl(var(--ch-linkedin))]" : "border-border bg-card hover:border-primary/40"}`}>
+                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold ${on ? "bg-primary text-primary-foreground" : f.done ? "bg-[hsl(var(--ch-linkedin))] text-white" : "bg-muted text-muted-foreground"}`}>{f.done && !on ? <Check className="h-4 w-4" /> : f.n}</span>
+                    <span className={on || f.done ? "font-semibold" : "text-muted-foreground"}>{f.label}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
 
         {started && (
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-card-border bg-border md:grid-cols-4">
@@ -105,11 +125,11 @@ export default function CampaignDetail() {
           </div>
         )}
 
-        <FlowSection n={1} title="What are you offering?" hint="Tell the AI what you sell and what you want people to do. It uses this to write every message and every reply." done={offerDone}>
-          <SettingsForm c={c} onSave={(d) => patch(d)} saving={update.isPending} />
-        </FlowSection>
+        {cur === 1 && <FlowSection n={1} title="What are you offering?" hint="Tell the AI what you sell and what you want people to do. It uses this to write every message and every reply." done={offerDone}>
+          <SettingsForm c={c} onSave={(d) => patch(d, "Saved", () => go(2))} saving={update.isPending} />
+        </FlowSection>}
 
-        <FlowSection n={2} title="Your messages" hint="The messages each person receives, in order. The AI personalises every one for the person it goes to. Follow-ups stop automatically as soon as someone replies." done={steps.length > 0}
+        {cur === 2 && <FlowSection n={2} title="Your messages" hint="The messages each person receives, in order. The AI personalises every one for the person it goes to. Follow-ups stop automatically as soon as someone replies." done={steps.length > 0}
           action={steps.length > 0 && <div className="flex gap-1.5">
             <Button size="sm" variant="outline" disabled={gen.isPending || !offerDone} title={!offerDone ? "Finish step 1 first" : undefined} data-testid="button-generate-sequence"
               onClick={() => gen.mutate({ id }, { onSuccess: () => { refresh(); toast({ title: "Messages rewritten by AI" }); }, onError: () => toast({ title: "AI could not write the messages", variant: "destructive" }) })}>
@@ -134,9 +154,10 @@ export default function CampaignDetail() {
               {steps.map((s, i) => <StepRow key={s.id} s={s} i={i} last={i === steps.length - 1} campaignId={id} prev={steps[i - 1]} next={steps[i + 1]} onEdit={() => setStepEdit(s)} onPreview={() => setPreview(s)} />)}
             </ol>
           )}
-        </FlowSection>
+          <WizardNav onBack={() => go(1)} onNext={() => go(3)} nextDisabled={!steps.length} hint={!steps.length ? "Add at least one message to continue." : null} />
+        </FlowSection>}
 
-        <FlowSection n={3} title="Who should receive them?" hint="Pick people from your lead list. Need more people? Find them on the Find leads page or add them on the Leads page." done={c.leads.length > 0}
+        {cur === 3 && <FlowSection n={3} title="Who should receive them?" hint="Pick people from your lead list. Need more people? Find them on the Find leads page or add them on the Leads page." done={c.leads.length > 0}
           action={<Button size="sm" variant={c.leads.length ? "outline" : "default"} onClick={() => setEnroll(true)} data-testid="button-enroll-leads"><UserPlus className="mr-1 h-3.5 w-3.5" />Add people</Button>}>
           {!c.leads.length ? (
             <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
@@ -166,9 +187,10 @@ export default function CampaignDetail() {
               ))}
             </div>
           )}
-        </FlowSection>
+          <WizardNav onBack={() => go(2)} onNext={() => go(4)} nextDisabled={!c.leads.length} hint={!c.leads.length ? "Add at least one person to continue." : null} />
+        </FlowSection>}
 
-        <FlowSection n={4} title={started ? "Sending" : "Start sending"} hint={started ? "This campaign runs on its own: follow-ups go out on schedule and the AI answers replies. Check the Inbox to see conversations." : "Everything is checked. Nothing is sent until you press the button."} done={started}>
+        {cur === 4 && <FlowSection n={4} title={started ? "Sending" : "Start sending"} hint={started ? "This campaign runs on its own: follow-ups go out on schedule and the AI answers replies. Check the Inbox to see conversations." : "Everything is checked. Nothing is sent until you press the button."} done={started}>
           <div className="space-y-4 p-4">
             {run.isPending && <AiWorking text="Personalising and sending messages" />}
             {result && !run.isPending && (
@@ -193,7 +215,8 @@ export default function CampaignDetail() {
               {started && <Link href="/inbox" className="inline-flex h-10 items-center rounded-md border border-input px-4 text-sm hover:bg-muted" data-testid="link-open-inbox">Open Inbox</Link>}
             </div>
           </div>
-        </FlowSection>
+          <WizardNav onBack={() => go(3)} />
+        </FlowSection>}
       </div>
 
       {stepEdit && <StepDialog campaignId={id} step={stepEdit === "new" ? null : stepEdit} onClose={() => setStepEdit(null)} />}
@@ -234,7 +257,9 @@ function SettingsForm({ c, onSave, saving }: { c: CampaignLike; onSave: (d: { na
         <span><b>Let AI answer replies for me</b><span className="block text-xs text-muted-foreground">When someone replies, the AI writes and sends the answer. Negative replies always wait for you.</span></span>
         <Switch checked={f.autoReply} onCheckedChange={(v) => set("autoReply", v)} data-testid="switch-edit-autoreply" />
       </label>
-      <div className="md:col-span-2"><Button onClick={() => onSave(f)} disabled={saving} data-testid="button-save-campaign">{saving ? "Saving..." : "Save"}</Button></div>
+      <div className="-mx-4 -mb-4 flex border-t border-border bg-muted/30 p-4 md:col-span-2">
+        <Button size="lg" className="ml-auto" onClick={() => onSave(f)} disabled={saving} data-testid="button-save-campaign">{saving ? "Saving..." : <>Save and continue<ArrowRight className="ml-1.5 h-4 w-4" /></>}</Button>
+      </div>
     </div>
   );
 }
