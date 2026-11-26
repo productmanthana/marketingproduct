@@ -176,6 +176,7 @@ router.post("/conversations/:id/ai-draft", async (req, res): Promise<void> => {
       body: draft.body,
       sentiment: draft.sentiment,
       reasoning: draft.reasoning,
+      needsHuman: draft.needsHuman,
     }),
   );
 });

@@ -684,6 +684,11 @@ export interface AiDraft {
   body: string;
   sentiment: Sentiment;
   reasoning: string;
+  /**
+     * What you need to add or decide before sending
+     * @nullable
+     */
+  needsHuman?: string | null;
 }
 
 export interface CallInput {

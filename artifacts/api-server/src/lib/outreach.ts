@@ -424,7 +424,7 @@ export async function processInbound(
     settings.escalateNegative &&
     (analysis.sentiment === "negative" || analysis.sentiment === "objection");
 
-  if (autoEnabled && analysis.shouldReply && !risky && conv.channel !== "call") {
+  if (autoEnabled && analysis.shouldReply && !risky && !analysis.needsHuman && conv.channel !== "call") {
     await recordOutbound({
       conversation: { ...conv, subject: conv.subject },
       lead: { ...lead, status: analysis.leadStatus },
@@ -450,7 +450,9 @@ export async function processInbound(
       .where(eq(outreachConversationsTable.id, conv.id));
     if (status === "needs_review") {
       await createTask({
-        title: `Review ${analysis.sentiment} reply from ${leadName(lead)} on ${conv.channel}`,
+        title: analysis.needsHuman
+          ? `Reply to ${leadName(lead)} on ${conv.channel}: ${analysis.needsHuman}`
+          : `Review ${analysis.sentiment} reply from ${leadName(lead)} on ${conv.channel}`,
         leadId: lead.id,
         dueAt: new Date(Date.now() + DAY_MS),
         source: "review",

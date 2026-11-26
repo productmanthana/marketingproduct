@@ -150,12 +150,18 @@ function Thread({ id, onBack }: { id: number; onBack: () => void }) {
       </div>
 
       <div className="space-y-3 border-t border-border bg-card p-4">
+        {c.status === "needs_review" && !ai && (
+          <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800" data-testid="banner-needs-review">
+            The AI held this reply for you instead of sending it (it needs something only you can give, like a meeting link or times). Press <b>Draft with AI</b>, fill in the details, then Send.
+          </p>
+        )}
         {draft.isPending && <AiWorking text="Drafting a reply in your tone" />}
         {ai && (
           <div className="pop rounded-lg border border-primary/30 bg-accent/50 p-3 text-xs" data-testid="panel-ai-draft">
             <div className="flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-primary" /><b className="text-accent-foreground">AI draft loaded below</b><span className="text-muted-foreground">Detected</span><Pill value={ai.sentiment} />
               <button className="ml-auto text-muted-foreground hover:text-foreground" onClick={() => setAi(null)} data-testid="button-dismiss-draft">Dismiss</button></div>
             <p className="mt-1.5 whitespace-pre-wrap text-muted-foreground">{ai.reasoning}</p>
+            {ai.needsHuman && <p className="mt-1.5 font-medium text-amber-700" data-testid="text-needs-human">Before sending: {ai.needsHuman}</p>}
           </div>
         )}
         {isEmail && <Input placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} data-testid="input-reply-subject" />}

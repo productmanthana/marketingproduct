@@ -1363,6 +1363,7 @@ components:
         body: { type: string }
         sentiment: { $ref: "#/components/schemas/Sentiment" }
         reasoning: { type: string }
+        needsHuman: { type: ["string", "null"], description: "What you need to add or decide before sending" }
 
     Call:
       type: object

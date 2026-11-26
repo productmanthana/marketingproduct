@@ -138,7 +138,12 @@ export type ReplyAnalysis = {
   subject: string | null;
   body: string;
   reasoning: string;
+  /** Set when a person must decide or supply something before this reply can go out. */
+  needsHuman: string | null;
 };
+
+/** Bracketed fill-ins like "[meeting link]" or "[your product]" that must never reach a prospect. */
+export const hasPlaceholder = (text: string) => /\[[^\]\n]{2,60}\]|\{\{[^}]+\}\}/.test(text);
 
 export async function analyzeAndDraftReply(args: {
   lead: LeadRow;
@@ -154,11 +159,13 @@ export async function analyzeAndDraftReply(args: {
     )
     .join("\n\n");
   const result = await jsonCompletion<ReplyAnalysis>(
-    `You are an autonomous SDR handling replies to outbound outreach. Read the conversation and the prospect's latest message. Classify sentiment as one of: positive, neutral, negative, objection, out_of_office, unsubscribe. Choose leadStatus: replied (generic), interested, meeting_booked (only if they confirmed a time), not_interested, unsubscribed. Then write the best next reply that moves toward the campaign goal: answer questions directly, handle objections with empathy and one concrete point, propose the meeting link when they show interest. If they asked to stop or unsubscribe, set shouldReply false and body to a one-line polite confirmation. Never invent pricing, customers or features that are not in the context; if you lack info, offer to cover it on a call. ${CHANNEL_RULES[args.channel] ?? ""} Respond as JSON: {"sentiment": string, "leadStatus": string, "shouldReply": boolean, "subject": string|null, "body": string, "reasoning": string (one sentence explaining the classification and approach)}.`,
+    `You are an autonomous SDR handling replies to outbound outreach. Read the conversation and the prospect's latest message. Classify sentiment as one of: positive, neutral, negative, objection, out_of_office, unsubscribe. Choose leadStatus: replied (generic), interested, meeting_booked (only if they confirmed a time), not_interested, unsubscribed. Then write the best next reply that moves toward the campaign goal: answer questions directly, handle objections with empathy and one concrete point, propose the meeting link when they show interest, but only if a "Meeting booking link" is given in the context. Never write placeholders or bracketed fill-ins such as [meeting link], [time], [your company]; only use facts from the context. Set needsHuman to a short reason (e.g. "Prospect wants to meet but no booking link is set", "Asked about pricing") whenever the right reply needs something you do not have: a booking link, specific times or dates to offer, pricing, contracts, or any commitment by the team; otherwise set needsHuman null. When needsHuman is set, still write your best draft for the team to edit. If they asked to stop or unsubscribe, set shouldReply false and body to a one-line polite confirmation. Never invent pricing, customers or features that are not in the context; if you lack info, offer to cover it on a call. ${CHANNEL_RULES[args.channel] ?? ""} Respond as JSON: {"sentiment": string, "leadStatus": string, "shouldReply": boolean, "subject": string|null, "body": string, "reasoning": string (one sentence explaining the classification and approach), "needsHuman": string|null}.`,
     `${senderContext(args.settings, args.campaign)}\n\nProspect:\n${leadProfile(args.lead)}\n\nConversation so far:\n${transcript}`,
   );
+  const placeholder = hasPlaceholder(`${result.subject ?? ""}\n${result.body}`);
   return {
     ...result,
+    needsHuman: result.needsHuman || (placeholder ? "Draft contains a placeholder that needs your real details" : null),
     subject: args.channel === "email" ? (result.subject ?? null) : null,
   };
 }

@@ -1033,7 +1033,8 @@ export const DraftAiReplyResponse = zod.object({
   "subject": zod.string().nullish(),
   "body": zod.string(),
   "sentiment": zod.enum(['positive', 'neutral', 'negative', 'objection', 'out_of_office', 'unsubscribe']),
-  "reasoning": zod.string()
+  "reasoning": zod.string(),
+  "needsHuman": zod.string().nullish().describe('What you need to add or decide before sending')
 })
 
 
