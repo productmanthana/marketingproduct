@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CalendarPlus } from "lucide-react";
-import { useGetCampaign, getGetCampaignQueryKey, useUpdateCampaign } from "@workspace/api-client-react";
+import { useGetCampaign, getGetCampaignQueryKey, useUpdateCampaign, useGetCalendar } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -8,10 +8,12 @@ import { useToast } from "@/hooks/use-toast";
 /** Lets you add the campaign's booking link right from the Inbox, then drafts the reply with it. */
 export function MeetingLinkPrompt({ campaignId, onSaved }: { campaignId: number; onSaved: () => void }) {
   const q = useGetCampaign(campaignId, { query: { queryKey: getGetCampaignQueryKey(campaignId) } });
+  const cal = useGetCalendar();
   const update = useUpdateCampaign();
   const { toast } = useToast();
   const [link, setLink] = useState("");
-  if (!q.data || q.data.meetingLink) return null;
+  // With Google Calendar connected the AI books meetings itself, so no link is needed.
+  if (!q.data || q.data.meetingLink || cal.data?.connected) return null;
 
   const valid = /^https?:\/\/\S+\.\S+/.test(link.trim());
   const save = () =>
@@ -30,7 +32,7 @@ export function MeetingLinkPrompt({ campaignId, onSaved }: { campaignId: number;
           {update.isPending ? "Saving..." : "Save & draft reply"}
         </Button>
       </div>
-      <a className="mt-2 inline-block text-amber-700 underline" href="https://calendar.google.com/calendar/u/0/r/appointment" target="_blank" rel="noreferrer">No link yet? Create one in Google Calendar</a>
+      <a className="mt-2 inline-block text-amber-700 underline" href="/settings">Or connect Google Calendar in Settings so the AI books meetings itself</a>
     </div>
   );
 }

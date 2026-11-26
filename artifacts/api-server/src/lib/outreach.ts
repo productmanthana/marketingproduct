@@ -22,6 +22,7 @@ import { analyzeAndDraftReply, personalizeMessage } from "./ai";
 import { hasEmailCapacity, linkedinQuotaLeft, sendEmail, sendLinkedIn, unipileConfigured } from "./delivery";
 import { logger } from "./logger";
 import { ensureDealForBookedLead } from "./crm";
+import { bookMeeting, calendarConnected, findFreeSlots } from "./calendar";
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -45,7 +46,7 @@ export async function getSettings(): Promise<SettingsRow> {
 
 /** Settings as the API returns them: provider keys are never sent back, only whether they are set. */
 export function publicSettings(s: SettingsRow) {
-  const { unipileApiKey, voiceApiKey, ...rest } = s;
+  const { unipileApiKey, voiceApiKey, googleRefreshToken: _g, ...rest } = s;
   return {
     ...rest,
     unipileConnected: unipileConfigured(s),
@@ -403,13 +404,55 @@ export async function processInbound(
     .where(eq(outreachMessagesTable.conversationId, conv.id))
     .orderBy(asc(outreachMessagesTable.createdAt), asc(outreachMessagesTable.id));
 
+  const free = calendarConnected(settings)
+    ? await findFreeSlots(settings).catch((err) => {
+        logger.error({ err }, "Could not read Google Calendar availability");
+        return null;
+      })
+    : null;
   const analysis = await analyzeAndDraftReply({
     lead,
     campaign,
     settings,
     channel: conv.channel,
     history,
+    calendar: free && { timezone: free.timezone, summary: free.summary, minutes: settings.meetingMinutes, canBook: true },
   });
+
+  const autoEnabled = settings.globalAutoReply && (campaign?.autoReply ?? false);
+  const risky =
+    settings.escalateNegative &&
+    (analysis.sentiment === "negative" || analysis.sentiment === "objection");
+
+  if (analysis.bookSlot) {
+    const start = free?.slots.get(analysis.bookSlot);
+    const holdBooking = (reason: string) => {
+      analysis.needsHuman = reason;
+      analysis.leadStatus = "interested";
+    };
+    if (!start) holdBooking(`Prospect picked ${analysis.bookSlot}, which is not a free slot on your calendar`);
+    else if (!autoEnabled || risky || analysis.needsHuman) holdBooking(`Prospect agreed to ${analysis.bookSlot} (${free!.timezone}); book it and confirm`);
+    else {
+      try {
+        const event = await bookMeeting(settings, {
+          start,
+          attendeeEmail: lead.email,
+          attendeeName: leadName(lead),
+          summary: `${settings.companyName} <> ${lead.company || leadName(lead)}`,
+          description: campaign?.goal ? `Intro call: ${campaign.goal}` : "Intro call",
+        });
+        await logActivity({
+          type: "meeting_booked",
+          description: `Booked ${analysis.bookSlot} (${free!.timezone}) with ${leadName(lead)}${event.meetLink ? ` on ${event.meetLink}` : ""}`,
+          channel: conv.channel,
+          leadId: lead.id,
+        });
+      } catch (err) {
+        logger.error({ err }, "Google Calendar booking failed");
+        holdBooking(`Could not book ${analysis.bookSlot}: ${(err as Error).message}`);
+      }
+    }
+  }
 
   await db
     .update(leadsTable)
@@ -418,11 +461,6 @@ export async function processInbound(
   if (analysis.leadStatus === "meeting_booked" && lead.status !== "meeting_booked") {
     await ensureDealForBookedLead(lead.id).catch((err) => logger.error({ err }, "Could not open a deal for booked lead"));
   }
-
-  const autoEnabled = settings.globalAutoReply && (campaign?.autoReply ?? false);
-  const risky =
-    settings.escalateNegative &&
-    (analysis.sentiment === "negative" || analysis.sentiment === "objection");
 
   if (autoEnabled && analysis.shouldReply && !risky && !analysis.needsHuman && conv.channel !== "call") {
     await recordOutbound({

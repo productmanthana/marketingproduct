@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PageHeader, Panel, Rows, ErrorBox, TONE_OPTIONS, useRefreshAll } from "@/components/bits";
 import { MailboxesPanel } from "@/components/settings/mailboxes";
 import { LinkedinPanel, VoicePanel, WebhooksPanel, type IntegrationForm } from "@/components/settings/integrations";
+import { CalendarPanel } from "@/components/settings/calendar";
 import { CURRENCIES } from "@/components/crm/format";
 
 type Form = Required<Omit<Settings, "unipileConnected" | "voiceConnected">> & { unipileApiKey: string; voiceApiKey: string };
@@ -111,6 +112,7 @@ export default function SettingsPage() {
           </div>
           <div className="min-w-0 space-y-5">
             <MailboxesPanel delay={60} />
+            <CalendarPanel delay={80} />
             <LinkedinPanel f={f as IntegrationForm} set={set} connected={q.data?.unipileConnected} delay={100} />
             <VoicePanel f={f as IntegrationForm} set={set} connected={q.data?.voiceConnected} delay={140} />
             <WebhooksPanel base={base} delay={180} />

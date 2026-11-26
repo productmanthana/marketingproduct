@@ -23,6 +23,7 @@ import {
   UpdateConversationParams,
 } from "@workspace/api-zod";
 import { analyzeAndDraftReply } from "../lib/ai";
+import { calendarConnected, findFreeSlots } from "../lib/calendar";
 import {
   getConversationDetail,
   getOrCreateConversation,
@@ -163,12 +164,15 @@ router.post("/conversations/:id/ai-draft", async (req, res): Promise<void> => {
     .from(outreachMessagesTable)
     .where(eq(outreachMessagesTable.conversationId, conv.id))
     .orderBy(asc(outreachMessagesTable.createdAt), asc(outreachMessagesTable.id));
+  const settings = await getSettings();
+  const free = calendarConnected(settings) ? await findFreeSlots(settings).catch(() => null) : null;
   const draft = await analyzeAndDraftReply({
     lead: lead!,
     campaign,
-    settings: await getSettings(),
+    settings,
     channel: conv.channel,
     history,
+    calendar: free && { timezone: free.timezone, summary: free.summary, minutes: settings.meetingMinutes, canBook: false },
   });
   res.json(
     DraftAiReplyResponse.parse({

@@ -762,6 +762,44 @@ export interface Settings {
   currency?: string;
 }
 
+export interface CalendarStatus {
+  /** Google OAuth client id and secret are set */
+  configured: boolean;
+  connected: boolean;
+  email: string;
+  meetingStartHour: number;
+  meetingEndHour: number;
+  meetingMinutes: number;
+  timezone: string;
+}
+
+export interface CalendarConnectInput {
+  /** Browser origin; the OAuth redirect goes to {origin}/api/calendar/google/callback */
+  origin: string;
+}
+
+export interface CalendarConnectUrl {
+  url: string;
+}
+
+export interface CalendarInput {
+  /**
+     * @minimum 0
+     * @maximum 23
+     */
+  meetingStartHour?: number;
+  /**
+     * @minimum 1
+     * @maximum 24
+     */
+  meetingEndHour?: number;
+  /**
+     * @minimum 10
+     * @maximum 120
+     */
+  meetingMinutes?: number;
+}
+
 export interface SettingsInput {
   senderName?: string;
   companyName?: string;

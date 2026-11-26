@@ -2145,6 +2145,64 @@ export const GlobalSearchResponseItem = zod.object({
 export const GlobalSearchResponse = zod.array(GlobalSearchResponseItem)
 
 
+export const GetCalendarResponse = zod.object({
+  "configured": zod.boolean().describe('Google OAuth client id and secret are set'),
+  "connected": zod.boolean(),
+  "email": zod.string(),
+  "meetingStartHour": zod.int(),
+  "meetingEndHour": zod.int(),
+  "meetingMinutes": zod.int(),
+  "timezone": zod.string()
+})
+
+
+export const updateCalendarBodyMeetingStartHourMin = 0;
+export const updateCalendarBodyMeetingStartHourMax = 23;
+
+export const updateCalendarBodyMeetingEndHourMax = 24;
+
+export const updateCalendarBodyMeetingMinutesMin = 10;
+export const updateCalendarBodyMeetingMinutesMax = 120;
+
+
+
+export const UpdateCalendarBody = zod.object({
+  "meetingStartHour": zod.int().min(updateCalendarBodyMeetingStartHourMin).max(updateCalendarBodyMeetingStartHourMax).optional(),
+  "meetingEndHour": zod.int().min(1).max(updateCalendarBodyMeetingEndHourMax).optional(),
+  "meetingMinutes": zod.int().min(updateCalendarBodyMeetingMinutesMin).max(updateCalendarBodyMeetingMinutesMax).optional()
+})
+
+export const UpdateCalendarResponse = zod.object({
+  "configured": zod.boolean().describe('Google OAuth client id and secret are set'),
+  "connected": zod.boolean(),
+  "email": zod.string(),
+  "meetingStartHour": zod.int(),
+  "meetingEndHour": zod.int(),
+  "meetingMinutes": zod.int(),
+  "timezone": zod.string()
+})
+
+
+export const DisconnectCalendarResponse = zod.object({
+  "configured": zod.boolean().describe('Google OAuth client id and secret are set'),
+  "connected": zod.boolean(),
+  "email": zod.string(),
+  "meetingStartHour": zod.int(),
+  "meetingEndHour": zod.int(),
+  "meetingMinutes": zod.int(),
+  "timezone": zod.string()
+})
+
+
+export const ConnectCalendarBody = zod.object({
+  "origin": zod.string().describe('Browser origin; the OAuth redirect goes to {origin}/api/calendar/google/callback')
+})
+
+export const ConnectCalendarResponse = zod.object({
+  "url": zod.string()
+})
+
+
 export const GetSettingsResponse = zod.object({
   "senderName": zod.string(),
   "companyName": zod.string(),

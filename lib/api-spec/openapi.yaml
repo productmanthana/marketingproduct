@@ -961,6 +961,54 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/SearchHit" } }
 
+  /calendar:
+    get:
+      operationId: getCalendar
+      tags: [settings]
+      responses:
+        "200":
+          description: Google Calendar connection and meeting hours
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CalendarStatus" }
+    put:
+      operationId: updateCalendar
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CalendarInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CalendarStatus" }
+    delete:
+      operationId: disconnectCalendar
+      tags: [settings]
+      responses:
+        "200":
+          description: Disconnected
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CalendarStatus" }
+  /calendar/connect:
+    post:
+      operationId: connectCalendar
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CalendarConnectInput" }
+      responses:
+        "200":
+          description: Google consent URL
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CalendarConnectUrl" }
   /settings:
     get:
       operationId: getSettings
@@ -1475,6 +1523,33 @@ components:
         voiceName: { type: string }
         voiceConnected: { type: boolean }
         currency: { type: string, description: "ISO 4217 code used for deal amounts" }
+    CalendarStatus:
+      type: object
+      required: [configured, connected, email, meetingStartHour, meetingEndHour, meetingMinutes, timezone]
+      properties:
+        configured: { type: boolean, description: "Google OAuth client id and secret are set" }
+        connected: { type: boolean }
+        email: { type: string }
+        meetingStartHour: { type: integer }
+        meetingEndHour: { type: integer }
+        meetingMinutes: { type: integer }
+        timezone: { type: string }
+    CalendarConnectInput:
+      type: object
+      required: [origin]
+      properties:
+        origin: { type: string, description: "Browser origin; the OAuth redirect goes to {origin}/api/calendar/google/callback" }
+    CalendarConnectUrl:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string }
+    CalendarInput:
+      type: object
+      properties:
+        meetingStartHour: { type: integer, minimum: 0, maximum: 23 }
+        meetingEndHour: { type: integer, minimum: 1, maximum: 24 }
+        meetingMinutes: { type: integer, minimum: 10, maximum: 120 }
     SettingsInput:
       type: object
       properties:

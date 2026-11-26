@@ -140,7 +140,21 @@ export type ReplyAnalysis = {
   reasoning: string;
   /** Set when a person must decide or supply something before this reply can go out. */
   needsHuman: string | null;
+  /** "YYYY-MM-DD HH:MM" of the free calendar slot the prospect agreed to, when the AI should book it. */
+  bookSlot: string | null;
 };
+
+/** Free slots on the connected Google Calendar; canBook=false means offer times but never confirm a booking. */
+export type CalendarContext = { timezone: string; summary: string; minutes: number; canBook: boolean };
+
+function calendarRules(c: CalendarContext | null | undefined): string {
+  if (!c) return "";
+  const now = new Date().toLocaleString("en-US", { timeZone: c.timezone, dateStyle: "full", timeStyle: "short" });
+  const booking = c.canBook
+    ? `If the prospect named a day/time that matches a free slot, or said any time works, set bookSlot to that slot as "YYYY-MM-DD HH:MM" (for "any time" pick the earliest slot) and set leadStatus to meeting_booked; the body confirms the exact day, date and time with the time zone and says a Google Calendar invite with the Google Meet link is on its way. `
+    : `Never confirm a booking; set bookSlot null. `;
+  return ` A Google Calendar is connected, so you can schedule ${c.minutes}-minute meetings yourself and do NOT need a booking link. Now it is ${now} (${c.timezone}). Free slots (${c.timezone}):\n${c.summary || "none in the next week"}\n${booking}If they want to meet but gave no time, or their time is not free, offer 2-3 specific free slots (with time zone) and set bookSlot null. Only use the listed slots. Do not set needsHuman just because there is no booking link.`;
+}
 
 /** Bracketed fill-ins like "[meeting link]" or "[your product]" that must never reach a prospect. */
 export const hasPlaceholder = (text: string) => /\[[^\]\n]{2,60}\]|\{\{[^}]+\}\}/.test(text);
@@ -151,6 +165,7 @@ export async function analyzeAndDraftReply(args: {
   settings: SettingsRow;
   channel: string;
   history: MessageRow[];
+  calendar?: CalendarContext | null;
 }): Promise<ReplyAnalysis> {
   const transcript = args.history
     .map(
@@ -159,12 +174,13 @@ export async function analyzeAndDraftReply(args: {
     )
     .join("\n\n");
   const result = await jsonCompletion<ReplyAnalysis>(
-    `You are an autonomous SDR handling replies to outbound outreach. Read the conversation and the prospect's latest message. Classify sentiment as one of: positive, neutral, negative, objection, out_of_office, unsubscribe. Choose leadStatus: replied (generic), interested, meeting_booked (only if they confirmed a time), not_interested, unsubscribed. Then write the best next reply that moves toward the campaign goal: answer questions directly, handle objections with empathy and one concrete point, propose the meeting link when they show interest, but only if a "Meeting booking link" is given in the context. Never write placeholders or bracketed fill-ins such as [meeting link], [time], [your company]; only use facts from the context. Set needsHuman to a short reason (e.g. "Prospect wants to meet but no booking link is set", "Asked about pricing") whenever the right reply needs something you do not have: a booking link, specific times or dates to offer, pricing, contracts, or any commitment by the team; otherwise set needsHuman null. When needsHuman is set, still write your best draft for the team to edit. If they asked to stop or unsubscribe, set shouldReply false and body to a one-line polite confirmation. Never invent pricing, customers or features that are not in the context; if you lack info, offer to cover it on a call. ${CHANNEL_RULES[args.channel] ?? ""} Respond as JSON: {"sentiment": string, "leadStatus": string, "shouldReply": boolean, "subject": string|null, "body": string, "reasoning": string (one sentence explaining the classification and approach), "needsHuman": string|null}.`,
+    `You are an autonomous SDR handling replies to outbound outreach. Read the conversation and the prospect's latest message. Classify sentiment as one of: positive, neutral, negative, objection, out_of_office, unsubscribe. Choose leadStatus: replied (generic), interested, meeting_booked (only if they confirmed a time), not_interested, unsubscribed. Then write the best next reply that moves toward the campaign goal: answer questions directly, handle objections with empathy and one concrete point, propose the meeting link when they show interest, but only if a "Meeting booking link" is given in the context. Never write placeholders or bracketed fill-ins such as [meeting link], [time], [your company]; only use facts from the context. Set needsHuman to a short reason (e.g. "Prospect wants to meet but no booking link is set", "Asked about pricing") whenever the right reply needs something you do not have: a booking link, specific times or dates to offer, pricing, contracts, or any commitment by the team; otherwise set needsHuman null. When needsHuman is set, still write your best draft for the team to edit.${calendarRules(args.calendar)} If they asked to stop or unsubscribe, set shouldReply false and body to a one-line polite confirmation. Never invent pricing, customers or features that are not in the context; if you lack info, offer to cover it on a call. ${CHANNEL_RULES[args.channel] ?? ""} Respond as JSON: {"sentiment": string, "leadStatus": string, "shouldReply": boolean, "subject": string|null, "body": string, "reasoning": string (one sentence explaining the classification and approach), "needsHuman": string|null, "bookSlot": string|null}.`,
     `${senderContext(args.settings, args.campaign)}\n\nProspect:\n${leadProfile(args.lead)}\n\nConversation so far:\n${transcript}`,
   );
   const placeholder = hasPlaceholder(`${result.subject ?? ""}\n${result.body}`);
   return {
     ...result,
+    bookSlot: args.calendar?.canBook ? (result.bookSlot ?? null) : null,
     needsHuman: result.needsHuman || (placeholder ? "Draft contains a placeholder that needs your real details" : null),
     subject: args.channel === "email" ? (result.subject ?? null) : null,
   };

@@ -165,6 +165,12 @@ export const settingsTable = pgTable("settings", {
   voicePhoneNumberId: text("voice_phone_number_id").notNull().default(""),
   voiceName: text("voice_name").notNull().default(""),
   currency: text("currency").notNull().default("USD"),
+  // Google Calendar auto-scheduling
+  googleRefreshToken: text("google_refresh_token").notNull().default(""),
+  googleEmail: text("google_email").notNull().default(""),
+  meetingStartHour: integer("meeting_start_hour").notNull().default(10),
+  meetingEndHour: integer("meeting_end_hour").notNull().default(18),
+  meetingMinutes: integer("meeting_minutes").notNull().default(20),
 });
 
 export const mailboxesTable = pgTable("mailboxes", {

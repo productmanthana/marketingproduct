@@ -12,6 +12,7 @@ import prospectsRouter from "./prospects";
 import accountsRouter from "./accounts";
 import dealsRouter from "./deals";
 import crmRouter from "./crm";
+import calendarRouter from "./calendar";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(prospectsRouter);
 router.use(accountsRouter);
 router.use(dealsRouter);
 router.use(crmRouter);
+router.use(calendarRouter);
 
 export default router;
