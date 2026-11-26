@@ -1654,9 +1654,15 @@ components:
         createdAt: { type: string, format: date-time }
     ProspectStatus:
       type: object
-      required: [configured]
+      required: [configured, apollo, firecrawl]
       properties:
-        configured: { type: boolean }
+        configured: { type: boolean, description: "At least one lead source has a key" }
+        apollo: { type: boolean, description: "Apollo API key is set" }
+        firecrawl: { type: boolean, description: "Firecrawl API key is set" }
+    LeadSource:
+      type: string
+      enum: [auto, firecrawl, apollo]
+      description: "auto tries Firecrawl first, then Apollo"
     ProspectSearchInput:
       type: object
       properties:
@@ -1666,6 +1672,7 @@ components:
         employeeRanges: { type: array, items: { type: string }, description: "e.g. 1,10 or 51,200" }
         keywords: { type: string }
         page: { type: integer, minimum: 1 }
+        source: { $ref: "#/components/schemas/LeadSource" }
     Prospect:
       type: object
       required: [apolloId, firstName, lastName, hasEmail, alreadyImported]
@@ -1686,6 +1693,7 @@ components:
       type: object
       required: [people, total, page, totalPages]
       properties:
+        source: { type: string, enum: [firecrawl, apollo], description: "Source that returned these results" }
         people: { type: array, items: { $ref: "#/components/schemas/Prospect" } }
         total: { type: integer }
         page: { type: integer }
@@ -1696,6 +1704,7 @@ components:
       properties:
         apolloIds: { type: array, items: { type: string }, minItems: 1, maxItems: 50 }
         campaignId: { type: integer }
+        source: { $ref: "#/components/schemas/LeadSource" }
     ProspectImportResult:
       type: object
       required: [imported, skipped]

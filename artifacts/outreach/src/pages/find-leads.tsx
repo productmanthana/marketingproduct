@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader, Panel, Empty, Rows, Initials, errMsg, useRefreshAll } from "@/components/bits";
 import { cn } from "@/lib/utils";
+import { LeadSourcePicker, SOURCE_LABEL, useLeadSource } from "@/components/lead-source";
 
 const SIZES = [
   { v: "1,10", l: "1-10" },
@@ -46,6 +47,7 @@ export default function FindLeads() {
   const [error, setError] = useState<{ msg: string; plan: boolean } | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [campaignId, setCampaignId] = useState("");
+  const [source, setSource] = useLeadSource(status.data);
 
   const run = (q: ProspectSearchInput) => {
     setError(null);
@@ -61,7 +63,7 @@ export default function FindLeads() {
 
   const submit = () => run({
     industries: list(industries), titles: list(titles), locations: list(locations),
-    employeeRanges: sizes, keywords: keywords || undefined, page: 1,
+    employeeRanges: sizes, keywords: keywords || undefined, page: 1, source,
   });
 
   const selectable = result?.people.filter((p) => !p.alreadyImported) ?? [];
@@ -69,7 +71,7 @@ export default function FindLeads() {
   const toggle = (id: string) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const doImport = () => imp.mutate(
-    { data: { apolloIds: [...picked], campaignId: campaignId ? Number(campaignId) : undefined } },
+    { data: { apolloIds: [...picked], campaignId: campaignId ? Number(campaignId) : undefined, source: result?.source ?? source } },
     {
       onSuccess: (r) => {
         toast({ title: `Added ${r.imported} leads`, description: r.skipped ? `${r.skipped} skipped (already added or no details)` : undefined });
@@ -84,11 +86,11 @@ export default function FindLeads() {
 
   return (
     <div>
-      <PageHeader eyebrow="Prospecting · Apollo" title="Find leads" />
+      <PageHeader eyebrow="Prospecting · Firecrawl / Apollo" title="Find leads" />
       <div className="space-y-5 p-6 md:p-8">
         {notConnected && (
           <div className="rounded-xl border border-card-border bg-card p-4 text-sm" data-testid="banner-apollo-missing">
-            Apollo isn't connected. Add your Apollo API key as the <span className="font-mono">Apollo_api_key</span> secret to search for leads.
+            No lead source is connected. Add a <span className="font-mono">FIRECRAWL_API_KEY</span> (recommended) or <span className="font-mono">Apollo_api_key</span> secret to search for leads.
           </div>
         )}
 
@@ -102,7 +104,8 @@ export default function FindLeads() {
               <Input placeholder="India, Bangalore, United States" value={locations} onChange={(e) => setLocations(e.target.value)} data-testid="input-locations" /></div>
             <div className="space-y-1.5"><Label>Keywords (optional)</Label>
               <Input placeholder="e.g. hiring SDRs" value={keywords} onChange={(e) => setKeywords(e.target.value)} data-testid="input-keywords" /></div>
-            <div className="space-y-1.5 md:col-span-2"><Label>Company size (employees)</Label>
+            <LeadSourcePicker status={status.data} value={source} onChange={setSource} className="md:col-span-2" />
+            <div className="space-y-1.5 md:col-span-2"><Label>Company size (employees){source === "firecrawl" && <span className="ml-1 font-normal text-muted-foreground">(applies with Apollo only)</span>}</Label>
               <div className="flex flex-wrap gap-1.5">
                 {SIZES.map((s) => {
                   const on = sizes.includes(s.v);
@@ -112,9 +115,9 @@ export default function FindLeads() {
                 })}
               </div></div>
             <div className="flex items-center justify-between gap-3 md:col-span-2">
-              <p className="text-xs text-muted-foreground">Separate multiple values with commas. Searching is free; adding leads uses Apollo credits to reveal emails.</p>
+              <p className="text-xs text-muted-foreground">Separate multiple values with commas. Searching is free; adding leads uses credits to reveal emails.</p>
               <Button type="submit" disabled={search.isPending || !!notConnected} data-testid="button-search-prospects">
-                <Search className="mr-1 h-4 w-4" />{search.isPending ? "Searching..." : "Search Apollo"}
+                <Search className="mr-1 h-4 w-4" />{search.isPending ? "Searching..." : "Search leads"}
               </Button>
             </div>
           </form>
@@ -134,7 +137,7 @@ export default function FindLeads() {
           <div className="overflow-hidden rounded-xl border border-card-border bg-card"><Rows n={6} h={44} /></div>
         ) : result && (
           <Panel
-            title={`${result.total.toLocaleString()} people found`}
+            title={`${result.total.toLocaleString()} people found${result.source ? ` · via ${SOURCE_LABEL[result.source]}` : ""}`}
             action={
               <div className="flex flex-wrap items-center gap-2">
                 <select className={sel} value={campaignId} onChange={(e) => setCampaignId(e.target.value)} data-testid="select-import-campaign">

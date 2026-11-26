@@ -157,7 +157,9 @@ export const QualifyLeadsResponse = zod.object({
  * @summary Whether the Apollo lead database is connected
  */
 export const GetProspectStatusResponse = zod.object({
-  "configured": zod.boolean()
+  "configured": zod.boolean().describe('At least one lead source has a key'),
+  "apollo": zod.boolean().describe('Apollo API key is set'),
+  "firecrawl": zod.boolean().describe('Firecrawl API key is set')
 })
 
 
@@ -173,10 +175,12 @@ export const SearchProspectsBody = zod.object({
   "locations": zod.array(zod.string()).optional(),
   "employeeRanges": zod.array(zod.string()).optional().describe('e.g. 1,10 or 51,200'),
   "keywords": zod.string().optional(),
-  "page": zod.int().min(1).optional()
+  "page": zod.int().min(1).optional(),
+  "source": zod.enum(['auto', 'firecrawl', 'apollo']).optional().describe('auto tries Firecrawl first, then Apollo')
 })
 
 export const SearchProspectsResponse = zod.object({
+  "source": zod.enum(['firecrawl', 'apollo']).optional().describe('Source that returned these results'),
   "people": zod.array(zod.object({
   "apolloId": zod.string(),
   "firstName": zod.string(),
@@ -206,7 +210,8 @@ export const importProspectsBodyApolloIdsMax = 50;
 
 export const ImportProspectsBody = zod.object({
   "apolloIds": zod.array(zod.string()).min(1).max(importProspectsBodyApolloIdsMax),
-  "campaignId": zod.int().optional()
+  "campaignId": zod.int().optional(),
+  "source": zod.enum(['auto', 'firecrawl', 'apollo']).optional().describe('auto tries Firecrawl first, then Apollo')
 })
 
 export const ImportProspectsResponse = zod.object({

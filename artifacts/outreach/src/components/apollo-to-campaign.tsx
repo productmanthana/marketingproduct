@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Rows, errMsg, useRefreshAll } from "@/components/bits";
+import { LeadSourcePicker, SOURCE_LABEL, useLeadSource } from "@/components/lead-source";
 
 const list = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
 
-// Search Apollo from inside a campaign. People added before are flagged with where they are now.
+// Search leads (Firecrawl or Apollo) from inside a campaign. People added before are flagged with where they are now.
 export function ApolloToCampaign({ campaignId, onDone }: { campaignId: number; onDone: () => void }) {
   const status = useGetProspectStatus();
   const search = useSearchProspects();
@@ -23,6 +24,7 @@ export function ApolloToCampaign({ campaignId, onDone }: { campaignId: number; o
   const [query, setQuery] = useState<ProspectSearchInput | null>(null);
   const [error, setError] = useState<{ msg: string; plan: boolean } | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [source, setSource] = useLeadSource(status.data);
 
   const run = (q: ProspectSearchInput) => {
     setError(null);
@@ -39,10 +41,10 @@ export function ApolloToCampaign({ campaignId, onDone }: { campaignId: number; o
     const fresh = chosen.filter((p) => !p.leadId).map((p) => p.apolloId);
     const known = chosen.flatMap((p) => (p.leadId ? [p.leadId] : []));
     try {
-      const r = fresh.length ? await imp.mutateAsync({ data: { apolloIds: fresh, campaignId } }) : { imported: 0 };
+      const r = fresh.length ? await imp.mutateAsync({ data: { apolloIds: fresh, campaignId, source: result!.source ?? source } }) : { imported: 0 };
       if (known.length) await enroll.mutateAsync({ id: campaignId, data: { leadIds: known } });
       refresh();
-      toast({ title: `${r.imported + known.length} added to this campaign`, description: fresh.length > r.imported ? `${fresh.length - r.imported} skipped (no details from Apollo)` : undefined });
+      toast({ title: `${r.imported + known.length} added to this campaign`, description: fresh.length > r.imported ? `${fresh.length - r.imported} skipped (no details found)` : undefined });
       onDone();
     } catch (e) {
       toast({ title: "Couldn't add them", description: errMsg(e), variant: "destructive" });
@@ -50,7 +52,7 @@ export function ApolloToCampaign({ campaignId, onDone }: { campaignId: number; o
   };
 
   if (status.data && !status.data.configured) {
-    return <p className="rounded-lg border border-border p-3 text-sm text-muted-foreground">Apollo isn't connected yet. Add your Apollo API key in secrets to search here.</p>;
+    return <p className="rounded-lg border border-border p-3 text-sm text-muted-foreground">No lead source is connected yet. Add a Firecrawl or Apollo API key in secrets to search here.</p>;
   }
 
   const field = (k: keyof typeof f, placeholder: string) => (
@@ -62,14 +64,15 @@ export function ApolloToCampaign({ campaignId, onDone }: { campaignId: number; o
     <div className="space-y-2 rounded-lg border border-border p-3">
       <form className="grid grid-cols-2 gap-2" onSubmit={(e) => {
         e.preventDefault();
-        run({ titles: list(f.titles), industries: list(f.industries), locations: list(f.locations), keywords: f.keywords || undefined, page: 1 });
+        run({ titles: list(f.titles), industries: list(f.industries), locations: list(f.locations), keywords: f.keywords || undefined, page: 1, source });
       }}>
         {field("titles", "Job titles: Founder, VP Sales")}
         {field("industries", "Industry: saas, fintech")}
         {field("locations", "Location: Mumbai, India")}
         {field("keywords", "Keywords")}
+        <LeadSourcePicker status={status.data} value={source} onChange={setSource} className="col-span-2" />
         <Button type="submit" size="sm" className="col-span-2" disabled={search.isPending} data-testid="button-apollo-search">
-          <Search className="mr-1 h-4 w-4" />{search.isPending ? "Searching..." : "Search Apollo"}
+          <Search className="mr-1 h-4 w-4" />{search.isPending ? "Searching..." : "Search leads"}
         </Button>
       </form>
 
@@ -82,7 +85,7 @@ export function ApolloToCampaign({ campaignId, onDone }: { campaignId: number; o
 
       {search.isPending && !result ? <Rows n={3} h={36} /> : result && (
         <>
-          <div className="text-xs text-muted-foreground">{result.total.toLocaleString()} people found</div>
+          <div className="text-xs text-muted-foreground">{result.total.toLocaleString()} people found{result.source ? ` · via ${SOURCE_LABEL[result.source]}` : ""}</div>
           <div className="max-h-72 overflow-y-auto rounded-md border border-border">
             {!result.people.length ? <p className="p-4 text-center text-sm text-muted-foreground">No one matches. Try fewer filters.</p> : result.people.map((p) => (
               <label key={p.apolloId} className={`flex items-center gap-3 border-b border-border px-3 py-2 last:border-0 ${inThis(p) ? "opacity-60" : "cursor-pointer hover:bg-muted/40"}`} data-testid={`row-apollo-${p.apolloId}`}>

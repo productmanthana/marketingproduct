@@ -534,8 +534,25 @@ export interface SentItem {
 }
 
 export interface ProspectStatus {
+  /** At least one lead source has a key */
   configured: boolean;
+  /** Apollo API key is set */
+  apollo: boolean;
+  /** Firecrawl API key is set */
+  firecrawl: boolean;
 }
+
+/**
+ * auto tries Firecrawl first, then Apollo
+ */
+export type LeadSource = typeof LeadSource[keyof typeof LeadSource];
+
+
+export const LeadSource = {
+  auto: 'auto',
+  firecrawl: 'firecrawl',
+  apollo: 'apollo',
+} as const;
 
 export interface ProspectSearchInput {
   titles?: string[];
@@ -547,6 +564,7 @@ export interface ProspectSearchInput {
   keywords?: string;
   /** @minimum 1 */
   page?: number;
+  source?: LeadSource;
 }
 
 export interface Prospect {
@@ -577,7 +595,20 @@ export interface Prospect {
   campaignName?: string | null;
 }
 
+/**
+ * Source that returned these results
+ */
+export type ProspectSearchResultSource = typeof ProspectSearchResultSource[keyof typeof ProspectSearchResultSource];
+
+
+export const ProspectSearchResultSource = {
+  firecrawl: 'firecrawl',
+  apollo: 'apollo',
+} as const;
+
 export interface ProspectSearchResult {
+  /** Source that returned these results */
+  source?: ProspectSearchResultSource;
   people: Prospect[];
   total: number;
   page: number;
@@ -591,6 +622,7 @@ export interface ProspectImportInput {
      */
   apolloIds: string[];
   campaignId?: number;
+  source?: LeadSource;
 }
 
 export interface ProspectImportResult {

@@ -30,7 +30,7 @@ import {
 import { qualifyLead, researchCompany } from "../lib/ai";
 import { htmlToText, websiteFor } from "../lib/web";
 import { serializeTasks } from "./tasks";
-import { apolloKey, enrichOrganization } from "../lib/apollo";
+import { enrichOrganization, leadDataConfigured } from "../lib/apollo";
 import { logger } from "../lib/logger";
 import { ensureDealForBookedLead, serializeDeals } from "../lib/crm";
 import {
@@ -112,7 +112,7 @@ type LeadRowT = typeof leadsTable.$inferSelect;
 
 /** Fill company details (industry, size, location, LinkedIn page) from Apollo. Only fills empty fields. */
 async function applyCompanyDetails(lead: LeadRowT): Promise<LeadRowT> {
-  if (!apolloKey()) return lead;
+  if (!leadDataConfigured()) return lead;
   const site = websiteFor(lead);
   if (!site) return lead;
   const domain = new URL(site).hostname.replace(/^www\./, "");
@@ -138,7 +138,7 @@ async function applyCompanyDetails(lead: LeadRowT): Promise<LeadRowT> {
 }
 
 function companyDetailsInBackground(leads: LeadRowT[]): void {
-  if (!apolloKey()) return;
+  if (!leadDataConfigured()) return;
   const todo = leads.filter((l) => !l.companySize && websiteFor(l));
   if (!todo.length) return;
   void batchProcess(todo, (l) => applyCompanyDetails(l), { concurrency: 2, retries: 1 }).catch((err) =>

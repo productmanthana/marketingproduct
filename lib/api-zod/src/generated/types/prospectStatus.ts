@@ -7,5 +7,10 @@
  */
 
 export interface ProspectStatus {
+  /** At least one lead source has a key */
   configured: boolean;
+  /** Apollo API key is set */
+  apollo: boolean;
+  /** Firecrawl API key is set */
+  firecrawl: boolean;
 }

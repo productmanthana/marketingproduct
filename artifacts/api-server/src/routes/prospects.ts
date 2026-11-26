@@ -9,7 +9,8 @@ import {
   SearchProspectsBody,
   SearchProspectsResponse,
 } from "@workspace/api-zod";
-import { ApolloError, apolloKey, orgFields, placeOf, revealPeople, searchPeople } from "../lib/apollo";
+import { ApolloError, apolloKey, leadDataConfigured, orgFields, placeOf, revealPeople, searchPeople } from "../lib/apollo";
+import { firecrawlKey } from "../lib/firecrawl";
 import { logActivity } from "../lib/outreach";
 
 const router: IRouter = Router();
@@ -23,7 +24,7 @@ function sendApolloError(res: import("express").Response, err: unknown): void {
 }
 
 router.get("/prospects/status", (_req, res): void => {
-  res.json(GetProspectStatusResponse.parse({ configured: !!apolloKey() }));
+  res.json(GetProspectStatusResponse.parse({ configured: leadDataConfigured(), apollo: !!apolloKey(), firecrawl: !!firecrawlKey() }));
 });
 
 router.post("/prospects/search", async (req, res): Promise<void> => {
@@ -76,7 +77,7 @@ router.post("/prospects/import", async (req, res): Promise<void> => {
   const have = new Set(existing.map((e) => e.apolloId));
   const fresh = [...new Set(parsed.data.apolloIds)].filter((id) => !have.has(id));
   try {
-    const people = fresh.length ? await revealPeople(fresh) : [];
+    const people = fresh.length ? await revealPeople(fresh, parsed.data.source) : [];
     const rows = people
       .filter((p) => p.first_name)
       .map((p) => {
@@ -101,7 +102,7 @@ router.post("/prospects/import", async (req, res): Promise<void> => {
       });
     if (rows.length) {
       await db.insert(leadsTable).values(rows);
-      await logActivity({ type: "lead_added", description: `${rows.length} leads imported from Apollo` });
+      await logActivity({ type: "lead_added", description: `${rows.length} leads imported from ${parsed.data.source === "firecrawl" ? "Firecrawl" : "Apollo"}` });
     }
     res.json(
       ImportProspectsResponse.parse({ imported: rows.length, skipped: parsed.data.apolloIds.length - rows.length }),
