@@ -68,8 +68,8 @@ export default function CampaignDetail() {
   if (q.isLoading) return <div className="p-8"><Rows n={6} h={70} /></div>;
   if (q.isError || !c) return <ErrorBox onRetry={() => q.refetch()} />;
 
-  const patch = (data: Parameters<typeof update.mutate>[0]["data"], msg = "Saved", onDone?: () => void) =>
-    update.mutate({ id, data }, { onSuccess: () => { refresh(); toast({ title: msg }); onDone?.(); } });
+  const patch = (data: Parameters<typeof update.mutate>[0]["data"], msg = "Saved", onDone?: () => void, description?: string) =>
+    update.mutate({ id, data }, { onSuccess: () => { refresh(); toast({ title: msg, description }); onDone?.(); } });
 
   const steps = [...c.steps].sort((a, b) => a.stepOrder - b.stepOrder);
   const offerDone = (c.productPitch ?? "").trim().length >= 20;
@@ -126,7 +126,9 @@ export default function CampaignDetail() {
         )}
 
         {cur === 1 && <FlowSection n={1} title="What are you offering?" hint="Tell the AI what you sell and what you want people to do. It uses this to write every message and every reply." done={offerDone}>
-          <SettingsForm c={c} onSave={(d) => patch(d, "Saved", () => go(2))} saving={update.isPending} />
+          <SettingsForm c={c} saving={update.isPending} onSave={(d) => d.productPitch.trim().length >= 20
+            ? patch(d, "Saved", () => go(2))
+            : patch(d, "Saved. One more thing before step 2", undefined, "Fill in \"What do you sell, and who is it for?\" (or press Write it with AI) so the AI can write your messages.")} />
         </FlowSection>}
 
         {cur === 2 && <FlowSection n={2} title="Your messages" hint="The messages each person receives, in order. The AI personalises every one for the person it goes to. Follow-ups stop automatically as soon as someone replies." done={steps.length > 0}
@@ -141,11 +143,12 @@ export default function CampaignDetail() {
           {!steps.length && !gen.isPending ? (
             <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
               <Workflow className="h-8 w-8 text-muted-foreground" />
-              <p className="max-w-md text-sm text-muted-foreground">{offerDone ? "Let the AI write a series of emails, LinkedIn messages and call reminders for you, or write your own." : "Finish step 1 first, then the AI can write your messages for you."}</p>
+              <p className="max-w-md text-sm text-muted-foreground">{offerDone ? "Let the AI write a series of emails, LinkedIn messages and call reminders for you, or write your own." : "The AI needs to know what you sell before it can write your messages. Add that in step 1 (it takes a minute), or write your own messages."}</p>
               <div className="flex flex-wrap justify-center gap-2">
-                <Button disabled={!offerDone} data-testid="button-generate-sequence-empty"
+                {!offerDone && <Button onClick={() => go(1)} data-testid="button-goto-offer"><ArrowLeft className="mr-1 h-4 w-4" />Go to step 1 and describe your offer</Button>}
+                {offerDone && <Button data-testid="button-generate-sequence-empty"
                   onClick={() => gen.mutate({ id }, { onSuccess: () => { refresh(); toast({ title: "Your messages are ready" }); }, onError: () => toast({ title: "AI could not write the messages", variant: "destructive" }) })}>
-                  <Sparkles className="mr-1 h-4 w-4" />Write them for me with AI</Button>
+                  <Sparkles className="mr-1 h-4 w-4" />Write them for me with AI</Button>}
                 <Button variant="outline" onClick={() => setStepEdit("new")} data-testid="button-add-step-empty"><Pencil className="mr-1 h-4 w-4" />I'll write my own</Button>
               </div>
             </div>
