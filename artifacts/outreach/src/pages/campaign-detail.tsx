@@ -4,7 +4,7 @@ import { Link, useLocation, useParams } from "wouter";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronLeft, Pause, Play, Eye, Pencil, Plus, Rocket, RotateCcw, Sparkles, Trash2, UserPlus, Users, Workflow } from "lucide-react";
 import {
   useGetCampaign, useUpdateCampaign, useDeleteCampaign, useAddSequenceStep, useUpdateSequenceStep, useDeleteSequenceStep,
-  useEnrollLeads, useGenerateCampaignSequence, useRunCampaign, useListLeads, usePreviewSequenceStep,
+  useEnrollLeads, useGenerateCampaignSequence, useRunCampaign, useListLeads, usePreviewSequenceStep, useWriteCampaignPitch,
 } from "@workspace/api-client-react";
 import type { Lead, RunResult, SequenceStep, StepPreview } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -241,13 +241,24 @@ function SettingsForm({ c, onSave, saving }: { c: CampaignLike; onSave: (d: { na
   const forId = useRef(c.id);
   useEffect(() => { if (forId.current !== c.id) { forId.current = c.id; setF(init()); } }, [c.id]); // eslint-disable-line
   const set = (k: keyof typeof f, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
+  const write = useWriteCampaignPitch();
+  const { toast } = useToast();
+  const aiPitch = () => write.mutate({ id: c.id, data: { notes: f.productPitch, goal: f.goal } }, {
+    onSuccess: (r) => { set("productPitch", r.pitch); toast({ title: "AI wrote your pitch", description: "Read it, change anything that's not right, then save." }); },
+    onError: (e) => toast({ title: "AI could not write it", description: errMsg(e), variant: "destructive" }),
+  });
   return (
     <div className="grid gap-4 p-4 md:grid-cols-2">
       <div><Label>Campaign name <span className="font-normal text-muted-foreground">(only you see this)</span></Label><Input value={f.name} onChange={(e) => set("name", e.target.value)} data-testid="input-edit-name" /></div>
       <div><Label>What do you want people to do?</Label><Input value={f.goal} onChange={(e) => set("goal", e.target.value)} placeholder="Book a 20 minute intro call" data-testid="input-edit-goal" /></div>
       <div className="md:col-span-2"><Label>What do you sell, and who is it for?</Label>
-        <Textarea rows={4} value={f.productPitch} onChange={(e) => set("productPitch", e.target.value)} placeholder="Example: We help clinics fill empty appointment slots with an automated WhatsApp reminder service. Clinics using it see 30% fewer no-shows. Setup takes one day." data-testid="input-edit-pitch" />
-        <p className={`mt-1 text-xs ${f.productPitch.trim().length >= 20 ? "text-muted-foreground" : "text-amber-700"}`}>2–3 sentences. The more specific you are, the better the AI writes.</p></div>
+        <Textarea rows={4} value={f.productPitch} disabled={write.isPending} onChange={(e) => set("productPitch", e.target.value)} placeholder="Example: We help clinics fill empty appointment slots with an automated WhatsApp reminder service. Clinics using it see 30% fewer no-shows. Setup takes one day." data-testid="input-edit-pitch" />
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <Button type="button" variant="outline" size="sm" onClick={aiPitch} disabled={write.isPending} data-testid="button-ai-pitch">
+            <Sparkles className={`mr-1.5 h-3.5 w-3.5 text-primary ${write.isPending ? "animate-spin" : ""}`} />{write.isPending ? "Writing..." : f.productPitch.trim() ? "Improve with AI" : "Write it with AI"}
+          </Button>
+          <p className={`text-xs ${f.productPitch.trim().length >= 20 ? "text-muted-foreground" : "text-amber-700"}`}>Not sure what to write? Type a few rough words (like "WhatsApp reminders for clinics") and let the AI turn them into 2–3 clear sentences.</p>
+        </div></div>
       <div><Label>How should messages sound?</Label>
         <select className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm" value={f.replyTone} onChange={(e) => set("replyTone", e.target.value)} data-testid="select-edit-tone">
           {Array.from(new Set([...TONE_OPTIONS, f.replyTone])).map((t) => <option key={t}>{t}</option>)}

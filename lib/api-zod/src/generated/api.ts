@@ -723,6 +723,23 @@ export const GenerateCampaignSequenceResponse = zod.object({
 
 
 /**
+ * @summary Use AI to write the "what do you sell, and who is it for" pitch from rough notes (not saved)
+ */
+export const WriteCampaignPitchParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const WriteCampaignPitchBody = zod.object({
+  "notes": zod.string().optional(),
+  "goal": zod.string().optional()
+})
+
+export const WriteCampaignPitchResponse = zod.object({
+  "pitch": zod.string()
+})
+
+
+/**
  * @summary Activate campaign and execute all due sequence steps now (AI personalizes each message, schedules calls)
  */
 export const RunCampaignParams = zod.object({

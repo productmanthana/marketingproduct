@@ -105,6 +105,24 @@ export async function generateSequence(
     }));
 }
 
+export async function writePitch(args: {
+  campaign: CampaignRow;
+  settings: SettingsRow;
+  notes: string;
+  goal: string;
+}): Promise<string> {
+  const r = await jsonCompletion<{ pitch: string }>(
+    `You help a non-technical business owner describe their offer for cold outreach. Write 2-3 plain, specific sentences: what they sell, who it is for, and the concrete result or benefit (use numbers only if the notes give them; never invent statistics or facts). No hype, no buzzwords, no bullet points. Respond as JSON: {"pitch": string}.`,
+    [
+      `Company: ${args.settings.companyName}`,
+      `Campaign name: ${args.campaign.name}`,
+      args.goal && `What they want prospects to do: ${args.goal}`,
+      args.notes ? `Their rough notes: ${args.notes}` : "They gave no notes; write a sensible draft from the company and campaign name that they can edit.",
+    ].filter(Boolean).join("\n"),
+  );
+  return (r.pitch ?? "").trim();
+}
+
 export type Sentiment =
   | "positive"
   | "neutral"

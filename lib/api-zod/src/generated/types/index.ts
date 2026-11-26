@@ -74,6 +74,8 @@ export * from './messageDirection';
 export * from './messageInput';
 export * from './note';
 export * from './noteInput';
+export * from './pitchInput';
+export * from './pitchResult';
 export * from './prospect';
 export * from './prospectImportInput';
 export * from './prospectImportResult';

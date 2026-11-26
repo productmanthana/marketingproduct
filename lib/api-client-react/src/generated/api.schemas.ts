@@ -425,6 +425,15 @@ export interface StepPreviewInput {
   leadId: number;
 }
 
+export interface PitchInput {
+  notes?: string;
+  goal?: string;
+}
+
+export interface PitchResult {
+  pitch: string;
+}
+
 export interface StepPreview {
   /** @nullable */
   subject?: string | null;

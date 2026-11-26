@@ -327,6 +327,24 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CampaignDetail" }
+  /campaigns/{id}/write-pitch:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: writeCampaignPitch
+      tags: [campaigns]
+      summary: Use AI to write the "what do you sell, and who is it for" pitch from rough notes (not saved)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PitchInput" }
+      responses:
+        "200":
+          description: Suggested pitch
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PitchResult" }
   /campaigns/{id}/run:
     parameters:
       - { name: id, in: path, required: true, schema: { type: integer } }
@@ -1119,6 +1137,16 @@ components:
       required: [leadId]
       properties:
         leadId: { type: integer }
+    PitchInput:
+      type: object
+      properties:
+        notes: { type: string }
+        goal: { type: string }
+    PitchResult:
+      type: object
+      required: [pitch]
+      properties:
+        pitch: { type: string }
     StepPreview:
       type: object
       required: [body]

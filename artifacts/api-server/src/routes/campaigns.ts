@@ -22,8 +22,10 @@ import {
   UpdateCampaignParams,
   UpdateSequenceStepBody,
   UpdateSequenceStepParams,
+  WriteCampaignPitchBody,
+  WriteCampaignPitchParams,
 } from "@workspace/api-zod";
-import { generateSequence, personalizeMessage } from "../lib/ai";
+import { generateSequence, personalizeMessage, writePitch } from "../lib/ai";
 import { getSettings, runCampaign, serializeCampaigns, serializeLeads } from "../lib/outreach";
 
 const router: IRouter = Router();
@@ -251,6 +253,22 @@ router.post("/campaigns/:id/generate-sequence", async (req, res): Promise<void> 
       .values(steps.map((s, i) => ({ ...s, campaignId: c.id, stepOrder: i + 1 })));
   }
   res.json(await campaignDetail(c.id));
+});
+
+router.post("/campaigns/:id/write-pitch", async (req, res): Promise<void> => {
+  const params = WriteCampaignPitchParams.safeParse(req.params);
+  const body = WriteCampaignPitchBody.safeParse(req.body ?? {});
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: (params.error ?? body.error)?.message });
+    return;
+  }
+  const [c] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, params.data.id));
+  if (!c) {
+    res.status(404).json({ error: "Campaign not found" });
+    return;
+  }
+  const pitch = await writePitch({ campaign: c, settings: await getSettings(), notes: body.data.notes?.trim() ?? "", goal: body.data.goal?.trim() || c.goal });
+  res.json({ pitch });
 });
 
 router.post("/campaigns/:id/run", async (req, res): Promise<void> => {
