@@ -457,7 +457,10 @@ function EnrollDialog({ campaignId, enrolled, onClose }: { campaignId: number; e
           {q.isLoading ? <Rows n={4} h={36} /> : !avail.length ? <p className="p-6 text-center text-sm text-muted-foreground">No one in your lead list yet. Type someone in or upload a spreadsheet above, or find people on the Find leads page.</p> : avail.map((l) => (
             <label key={l.id} className="flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-muted/40" data-testid={`row-enroll-${l.id}`}>
               <Checkbox checked={sel.includes(l.id)} onCheckedChange={(v) => setSel((s) => v ? [...s, l.id] : s.filter((x) => x !== l.id))} />
-              <span className="flex-1 text-sm">{l.firstName} {l.lastName}<span className="ml-2 text-xs text-muted-foreground">{l.company}</span></span>
+              <span className="min-w-0 flex-1 text-sm">
+                <span>{l.firstName} {l.lastName}<span className="ml-2 text-xs text-muted-foreground">{l.company}</span></span>
+                <span className="block truncate text-xs text-muted-foreground">{l.email || "No email"}</span>
+              </span>
               {l.campaignName && <span className="text-[10px] text-muted-foreground">moves from {l.campaignName}</span>}
             </label>
           ))}
