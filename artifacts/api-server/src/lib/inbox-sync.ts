@@ -29,8 +29,11 @@ export async function verifyImap(m: MailboxRow): Promise<void> {
 export function stripQuoted(text: string): string {
   const lines = text.replace(/\r/g, "").split("\n");
   const out: string[] = [];
-  for (const line of lines) {
-    if (/^On .+wrote:\s*$/i.test(line.trim()) || /^-{2,}\s*Original Message/i.test(line.trim()) || /^From: .+/i.test(line.trim())) break;
+  for (const [i, line] of lines.entries()) {
+    // Gmail often wraps "On <date> <name> <email>" and "wrote:" onto two lines.
+    const header = `${line.trim()} ${lines[i + 1]?.trim() ?? ""}`;
+    if (/^On .+wrote:/i.test(line.trim()) || (/^On /i.test(line.trim()) && /^On .+wrote:\s*$/i.test(header))) break;
+    if (/^-{2,}\s*Original Message/i.test(line.trim()) || /^From: .+/i.test(line.trim())) break;
     if (line.trim().startsWith(">")) continue;
     out.push(line);
   }
@@ -99,10 +102,10 @@ export async function syncAllMailboxes(): Promise<{ mailboxes: number; newReplie
   return { mailboxes: boxes.length, newReplies, errors };
 }
 
-/** Background reply detection: checks every mailbox with IMAP settings every two minutes. */
+/** Background reply detection: checks every mailbox with IMAP settings right after start, then every minute. */
 export function startInboxSync(): void {
   let running = false;
-  setInterval(async () => {
+  const tick = async () => {
     if (running) return;
     running = true;
     try {
@@ -113,5 +116,7 @@ export function startInboxSync(): void {
     } finally {
       running = false;
     }
-  }, 120_000);
+  };
+  setTimeout(tick, 10_000);
+  setInterval(tick, 60_000);
 }
