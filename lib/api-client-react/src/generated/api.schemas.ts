@@ -5,6 +5,343 @@
  * Outreach Autopilot API
  * OpenAPI spec version: 0.1.0
  */
+export interface Objection {
+  id: number;
+  objection: string;
+  answer: string;
+  createdAt: string;
+}
+
+export interface ObjectionInput {
+  /** @minLength 1 */
+  objection: string;
+  /** @minLength 1 */
+  answer: string;
+}
+
+export type SuppressionKind = typeof SuppressionKind[keyof typeof SuppressionKind];
+
+
+export const SuppressionKind = {
+  email: 'email',
+  domain: 'domain',
+  phone: 'phone',
+  linkedin: 'linkedin',
+} as const;
+
+export interface Suppression {
+  id: number;
+  kind: SuppressionKind;
+  value: string;
+  reason: string;
+  createdAt: string;
+}
+
+export interface SuppressionInput {
+  /** Emails, @domains, phone numbers or LinkedIn URLs */
+  values: string[];
+  reason?: string;
+}
+
+export interface SuppressionResult {
+  added: number;
+  skipped: number;
+  leadsStopped: number;
+}
+
+export type TeamMemberRole = typeof TeamMemberRole[keyof typeof TeamMemberRole];
+
+
+export const TeamMemberRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export interface TeamMember {
+  id: number;
+  name: string;
+  email: string;
+  role: TeamMemberRole;
+  leadCount: number;
+  createdAt: string;
+}
+
+export type TeamMemberInputRole = typeof TeamMemberInputRole[keyof typeof TeamMemberInputRole];
+
+
+export const TeamMemberInputRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export interface TeamMemberInput {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 3 */
+  email: string;
+  role?: TeamMemberInputRole;
+}
+
+export type TeamMemberUpdateRole = typeof TeamMemberUpdateRole[keyof typeof TeamMemberUpdateRole];
+
+
+export const TeamMemberUpdateRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export interface TeamMemberUpdate {
+  /** @minLength 1 */
+  name?: string;
+  /** @minLength 3 */
+  email?: string;
+  role?: TeamMemberUpdateRole;
+}
+
+export type MeetingProvider = typeof MeetingProvider[keyof typeof MeetingProvider];
+
+
+export const MeetingProvider = {
+  manual: 'manual',
+  google: 'google',
+  calcom: 'calcom',
+} as const;
+
+export type MeetingStatus = typeof MeetingStatus[keyof typeof MeetingStatus];
+
+
+export const MeetingStatus = {
+  scheduled: 'scheduled',
+  completed: 'completed',
+  canceled: 'canceled',
+  no_show: 'no_show',
+} as const;
+
+export interface Meeting {
+  id: number;
+  leadId: number;
+  leadName: string;
+  /** @nullable */
+  leadCompany?: string | null;
+  /** @nullable */
+  leadEmail?: string | null;
+  /** @nullable */
+  dealId?: number | null;
+  /** @nullable */
+  dealName?: string | null;
+  title: string;
+  startsAt: string;
+  minutes: number;
+  /** @nullable */
+  link?: string | null;
+  provider: MeetingProvider;
+  status: MeetingStatus;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  reminderSentAt?: string | null;
+  /** @nullable */
+  followUpSubject?: string | null;
+  /** @nullable */
+  followUpBody?: string | null;
+  /** @nullable */
+  followUpSentAt?: string | null;
+  createdAt: string;
+}
+
+export interface MeetingInput {
+  leadId: number;
+  title?: string;
+  startsAt: string;
+  /**
+     * @minimum 5
+     * @maximum 480
+     */
+  minutes?: number;
+  link?: string;
+  notes?: string;
+}
+
+export type MeetingUpdateStatus = typeof MeetingUpdateStatus[keyof typeof MeetingUpdateStatus];
+
+
+export const MeetingUpdateStatus = {
+  scheduled: 'scheduled',
+  completed: 'completed',
+  canceled: 'canceled',
+  no_show: 'no_show',
+} as const;
+
+export interface MeetingUpdate {
+  title?: string;
+  startsAt?: string;
+  /**
+     * @minimum 5
+     * @maximum 480
+     */
+  minutes?: number;
+  /** @nullable */
+  link?: string | null;
+  status?: MeetingUpdateStatus;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  followUpSubject?: string | null;
+  /** @nullable */
+  followUpBody?: string | null;
+}
+
+export interface QuoteItem {
+  name: string;
+  /** @minimum 0 */
+  quantity: number;
+  /** @minimum 0 */
+  unitPrice: number;
+}
+
+export type QuoteStatus = typeof QuoteStatus[keyof typeof QuoteStatus];
+
+
+export const QuoteStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  accepted: 'accepted',
+  declined: 'declined',
+} as const;
+
+export interface Quote {
+  id: number;
+  dealId: number;
+  /** @nullable */
+  dealName?: string | null;
+  number: string;
+  title: string;
+  items: QuoteItem[];
+  discountPercent: number;
+  taxPercent: number;
+  subtotal: number;
+  total: number;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  validUntil?: string | null;
+  status: QuoteStatus;
+  publicUrl: string;
+  /** @nullable */
+  sentAt?: string | null;
+  /** @nullable */
+  respondedAt?: string | null;
+  createdAt: string;
+}
+
+export interface QuoteInput {
+  dealId: number;
+  /** @minLength 1 */
+  title: string;
+  items: QuoteItem[];
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  discountPercent?: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  taxPercent?: number;
+  notes?: string;
+  /** @nullable */
+  validUntil?: string | null;
+}
+
+export type QuoteUpdateStatus = typeof QuoteUpdateStatus[keyof typeof QuoteUpdateStatus];
+
+
+export const QuoteUpdateStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  accepted: 'accepted',
+  declined: 'declined',
+} as const;
+
+export interface QuoteUpdate {
+  /** @minLength 1 */
+  title?: string;
+  items?: QuoteItem[];
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  discountPercent?: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  taxPercent?: number;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  validUntil?: string | null;
+  status?: QuoteUpdateStatus;
+}
+
+export interface LeadIdsInput {
+  /** Omit to process every lead that needs it */
+  leadIds?: number[];
+}
+
+export interface SignalScanResult {
+  scanned: number;
+  withSignals: number;
+  /** Leads without a website */
+  skipped: number;
+}
+
+export interface VerifyResult {
+  checked: number;
+  valid: number;
+  risky: number;
+  invalid: number;
+}
+
+export interface OutreachTotals {
+  sent: number;
+  opened: number;
+  clicked: number;
+  replied: number;
+  bounced: number;
+  meetings: number;
+}
+
+export type CampaignPerformance = OutreachTotals & ({
+  campaignId: number;
+  name: string;
+  status: string;
+  cost: number;
+  /** @nullable */
+  costPerMeeting?: number | null;
+});
+
+export type ChannelPerformance = OutreachTotals & {
+  channel: string;
+};
+
+export type StepPerformance = OutreachTotals & {
+  campaignId: number;
+  campaignName: string;
+  stepOrder: number;
+  channel: string;
+  variant: string;
+};
+
+export interface OutreachReport {
+  currency: string;
+  totals: OutreachTotals;
+  campaigns: CampaignPerformance[];
+  channels: ChannelPerformance[];
+  steps: StepPerformance[];
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -29,6 +366,8 @@ export const LeadStatus = {
   meeting_booked: 'meeting_booked',
   not_interested: 'not_interested',
   unsubscribed: 'unsubscribed',
+  nurture: 'nurture',
+  bounced: 'bounced',
 } as const;
 
 export type CampaignStatus = typeof CampaignStatus[keyof typeof CampaignStatus];
@@ -49,6 +388,7 @@ export const ConversationStatus = {
   auto_replied: 'auto_replied',
   needs_review: 'needs_review',
   closed: 'closed',
+  snoozed: 'snoozed',
 } as const;
 
 export type CallStatus = typeof CallStatus[keyof typeof CallStatus];
@@ -71,6 +411,22 @@ export const Sentiment = {
   objection: 'objection',
   out_of_office: 'out_of_office',
   unsubscribe: 'unsubscribe',
+  not_now: 'not_now',
+  referral: 'referral',
+} as const;
+
+/**
+ * Result of the email check; null = not checked
+ * @nullable
+ */
+export type LeadEmailStatus = typeof LeadEmailStatus[keyof typeof LeadEmailStatus] | null;
+
+
+export const LeadEmailStatus = {
+  valid: 'valid',
+  risky: 'risky',
+  invalid: 'invalid',
+  bounced: 'bounced',
 } as const;
 
 export interface Lead {
@@ -124,6 +480,27 @@ export interface Lead {
   companyLocation?: string | null;
   /** @nullable */
   companyLinkedinUrl?: string | null;
+  /** @nullable */
+  ownerId?: number | null;
+  /** @nullable */
+  ownerName?: string | null;
+  /**
+     * Result of the email check; null = not checked
+     * @nullable
+     */
+  emailStatus?: LeadEmailStatus;
+  /**
+     * IANA time zone of the person
+     * @nullable
+     */
+  timezone?: string | null;
+  /**
+     * Buying signals, one per line
+     * @nullable
+     */
+  signals?: string | null;
+  /** @nullable */
+  signalsAt?: string | null;
   /** @nullable */
   lastContactedAt?: string | null;
   createdAt: string;
@@ -364,6 +741,21 @@ export const ActivityType = {
   deal_lost: 'deal_lost',
   note_added: 'note_added',
   account_created: 'account_created',
+  meeting_booked: 'meeting_booked',
+  reply_sorted: 'reply_sorted',
+  delivery_blocked: 'delivery_blocked',
+  email_bounced: 'email_bounced',
+  campaign_paused: 'campaign_paused',
+  buying_signal: 'buying_signal',
+  link_clicked: 'link_clicked',
+  meeting_reminder: 'meeting_reminder',
+  meeting_follow_up: 'meeting_follow_up',
+  quote_created: 'quote_created',
+  quote_sent: 'quote_sent',
+  quote_accepted: 'quote_accepted',
+  quote_declined: 'quote_declined',
+  suppression_added: 'suppression_added',
+  ab_winner: 'ab_winner',
 } as const;
 
 export interface Activity {
@@ -390,6 +782,8 @@ export const TaskSource = {
   call_summary: 'call_summary',
   ai_reply: 'ai_reply',
   review: 'review',
+  follow_up: 'follow_up',
+  meeting: 'meeting',
 } as const;
 
 export interface Task {
@@ -454,6 +848,10 @@ export interface LeadUpdate {
      * @nullable
      */
   firstWaitHours?: number | null;
+  /** @nullable */
+  ownerId?: number | null;
+  /** @nullable */
+  timezone?: string | null;
 }
 
 export interface LeadImportInput {
@@ -515,6 +913,8 @@ export interface Campaign {
   meetingLink?: string | null;
   /** Minutes between each person getting message 1; 0 sends to everyone at once */
   sendGapMinutes: number;
+  /** Total spend on the campaign, in the CRM currency */
+  cost?: number;
   leadCount: number;
   sentCount: number;
   replyCount: number;
@@ -522,6 +922,32 @@ export interface Campaign {
   stepCount: number;
   channels: Channel[];
   createdAt: string;
+}
+
+/**
+ * @nullable
+ */
+export type SequenceStepAbWinner = typeof SequenceStepAbWinner[keyof typeof SequenceStepAbWinner] | null;
+
+
+export const SequenceStepAbWinner = {
+  a: 'a',
+  b: 'b',
+} as const;
+
+export type VariantStatVariant = typeof VariantStatVariant[keyof typeof VariantStatVariant];
+
+
+export const VariantStatVariant = {
+  a: 'a',
+  b: 'b',
+} as const;
+
+export interface VariantStat {
+  variant: VariantStatVariant;
+  sent: number;
+  opened: number;
+  replied: number;
 }
 
 export interface SequenceStep {
@@ -536,6 +962,19 @@ export interface SequenceStep {
   subject?: string | null;
   /** Message template or call objective. Supports {{firstName}}, {{company}}, {{title}} */
   template: string;
+  /**
+     * A/B test version B subject
+     * @nullable
+     */
+  variantSubject?: string | null;
+  /**
+     * A/B test version B message; null = no test
+     * @nullable
+     */
+  variantTemplate?: string | null;
+  /** @nullable */
+  abWinner?: SequenceStepAbWinner;
+  abStats?: VariantStat[];
 }
 
 export type CampaignDetail = Campaign & {
@@ -567,6 +1006,8 @@ export interface CampaignUpdate {
      * @minimum 0
      */
   sendGapMinutes?: number;
+  /** @minimum 0 */
+  cost?: number;
   status?: CampaignStatus;
 }
 
@@ -579,6 +1020,17 @@ export interface SequenceStepInput {
   template: string;
 }
 
+/**
+ * @nullable
+ */
+export type SequenceStepUpdateAbWinner = typeof SequenceStepUpdateAbWinner[keyof typeof SequenceStepUpdateAbWinner] | null;
+
+
+export const SequenceStepUpdateAbWinner = {
+  a: 'a',
+  b: 'b',
+} as const;
+
 export interface SequenceStepUpdate {
   channel?: Channel;
   delayDays?: number;
@@ -587,6 +1039,12 @@ export interface SequenceStepUpdate {
   subject?: string;
   template?: string;
   stepOrder?: number;
+  /** @nullable */
+  variantSubject?: string | null;
+  /** @nullable */
+  variantTemplate?: string | null;
+  /** @nullable */
+  abWinner?: SequenceStepUpdateAbWinner;
 }
 
 export interface EnrollLeadsInput {
@@ -627,6 +1085,8 @@ export const MessageDeliveryStatus = {
   sent: 'sent',
   failed: 'failed',
   received: 'received',
+  bounced: 'bounced',
+  blocked: 'blocked',
 } as const;
 
 export interface Message {
@@ -644,6 +1104,13 @@ export interface Message {
   deliveryError?: string | null;
   /** @nullable */
   openedAt?: string | null;
+  /** @nullable */
+  clickedAt?: string | null;
+  clickCount?: number;
+  /** @nullable */
+  stepOrder?: number | null;
+  /** @nullable */
+  variant?: string | null;
   createdAt: string;
 }
 
@@ -760,7 +1227,36 @@ export interface Settings {
   voiceConnected?: boolean;
   /** ISO 4217 code used for deal amounts */
   currency?: string;
+  /** Send inside the window of each person's own time zone */
+  sendInLeadTimezone?: boolean;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  bouncePausePercent?: number;
+  /**
+     * @minimum 0
+     * @maximum 72
+     */
+  meetingReminderHours?: number;
+  /**
+     * @minimum 0
+     * @maximum 50
+     */
+  warmupPerDay?: number;
 }
+
+/**
+ * Which calendar the AI books on
+ */
+export type CalendarStatusProvider = typeof CalendarStatusProvider[keyof typeof CalendarStatusProvider];
+
+
+export const CalendarStatusProvider = {
+  none: 'none',
+  google: 'google',
+  calcom: 'calcom',
+} as const;
 
 export interface CalendarStatus {
   /** Google OAuth client id and secret are set */
@@ -771,6 +1267,21 @@ export interface CalendarStatus {
   meetingEndHour: number;
   meetingMinutes: number;
   timezone: string;
+  /** Which calendar the AI books on */
+  provider?: CalendarStatusProvider;
+  calcomConnected?: boolean;
+  /** @nullable */
+  calcomEventTypeId?: number | null;
+  /** @nullable */
+  calcomEventLength?: number | null;
+}
+
+export interface CalcomEventType {
+  id: number;
+  title: string;
+  /** @nullable */
+  slug?: string | null;
+  length: number;
 }
 
 export interface CalendarConnectInput {
@@ -798,6 +1309,12 @@ export interface CalendarInput {
      * @maximum 120
      */
   meetingMinutes?: number;
+  /** Write-only; empty keeps the stored key */
+  calcomApiKey?: string;
+  /** @nullable */
+  calcomEventTypeId?: number | null;
+  /** @nullable */
+  calcomEventLength?: number | null;
 }
 
 export interface SettingsInput {
@@ -838,6 +1355,23 @@ export interface SettingsInput {
      * @maxLength 3
      */
   currency?: string;
+  /** Send inside the window of each person's own time zone */
+  sendInLeadTimezone?: boolean;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  bouncePausePercent?: number;
+  /**
+     * @minimum 0
+     * @maximum 72
+     */
+  meetingReminderHours?: number;
+  /**
+     * @minimum 0
+     * @maximum 50
+     */
+  warmupPerDay?: number;
 }
 
 export interface Mailbox {
@@ -862,6 +1396,10 @@ export interface Mailbox {
   sentToday: number;
   /** Sending limit for today after warm-up ramp */
   todayLimit: number;
+  warmupSentToday?: number;
+  warmupReceived?: number;
+  /** Warm-up emails that landed in spam and were moved to the inbox */
+  warmupSpam?: number;
   active: boolean;
   /** @nullable */
   lastSyncAt?: string | null;
@@ -1192,11 +1730,14 @@ export type ListLeadsParams = {
 search?: string;
 status?: LeadStatus;
 campaignId?: number;
+ownerId?: number;
+hasSignals?: boolean;
 };
 
 export type ListConversationsParams = {
 channel?: Channel;
 status?: ConversationStatus;
+ownerId?: number;
 };
 
 export type ListCallsParams = {
@@ -1227,5 +1768,14 @@ leadId?: number;
 
 export type GlobalSearchParams = {
 q: string;
+};
+
+export type ListMeetingsParams = {
+leadId?: number;
+dealId?: number;
+};
+
+export type ListQuotesParams = {
+dealId?: number;
 };
 

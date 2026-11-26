@@ -34,4 +34,21 @@ export interface Settings {
   voiceConnected?: boolean;
   /** ISO 4217 code used for deal amounts */
   currency?: string;
+  /** Send inside the window of each person's own time zone */
+  sendInLeadTimezone?: boolean;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  bouncePausePercent?: number;
+  /**
+     * @minimum 0
+     * @maximum 72
+     */
+  meetingReminderHours?: number;
+  /**
+     * @minimum 0
+     * @maximum 50
+     */
+  warmupPerDay?: number;
 }

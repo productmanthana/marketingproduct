@@ -5,6 +5,8 @@ import { ConnectCalendarBody, GetCalendarResponse, UpdateCalendarBody } from "@w
 import { getSettings } from "../lib/outreach";
 import { calendarConnected, consentUrl, exchangeCode, googleConfigured, revoke, takeState } from "../lib/calendar";
 import { logger } from "../lib/logger";
+import { calcomConnected, listEventTypes } from "../lib/calcom";
+import { schedulerFor } from "../lib/scheduling";
 
 const router: IRouter = Router();
 
@@ -17,6 +19,10 @@ const status = (s: SettingsRow) =>
     meetingEndHour: s.meetingEndHour,
     meetingMinutes: s.meetingMinutes,
     timezone: s.timezone,
+    provider: schedulerFor(s)?.provider ?? "none",
+    calcomConnected: calcomConnected(s),
+    calcomEventTypeId: s.calcomEventTypeId,
+    calcomEventLength: s.calcomEventLength,
   });
 
 router.get("/calendar", async (_req, res): Promise<void> => {
@@ -29,9 +35,45 @@ router.put("/calendar", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  await getSettings();
-  const [row] = await db.update(settingsTable).set(parsed.data).where(eq(settingsTable.id, 1)).returning();
+  const current = await getSettings();
+  const { calcomApiKey, ...changes } = parsed.data;
+  const key = calcomApiKey?.trim();
+  if (key) {
+    // Check the key works, and pick the first meeting type when none is chosen yet.
+    try {
+      const types = await listEventTypes(key);
+      const chosen = types.find((t) => t.id === (changes.calcomEventTypeId ?? current.calcomEventTypeId)) ?? types[0];
+      Object.assign(changes, { calcomApiKey: key, calcomEventTypeId: chosen?.id ?? null, calcomEventLength: chosen?.length ?? null });
+    } catch (err) {
+      res.status(400).json({ error: `Cal.com did not accept this API key: ${(err as Error).message}` });
+      return;
+    }
+  }
+  const [row] = await db.update(settingsTable).set(changes).where(eq(settingsTable.id, 1)).returning();
   res.json(status(row!));
+});
+
+router.delete("/calendar/calcom", async (_req, res): Promise<void> => {
+  await getSettings();
+  const [row] = await db
+    .update(settingsTable)
+    .set({ calcomApiKey: "", calcomEventTypeId: null, calcomEventLength: null })
+    .where(eq(settingsTable.id, 1))
+    .returning();
+  res.json(status(row!));
+});
+
+router.get("/calendar/calcom/event-types", async (_req, res): Promise<void> => {
+  const s = await getSettings();
+  if (!s.calcomApiKey) {
+    res.status(400).json({ error: "Add your Cal.com API key first" });
+    return;
+  }
+  try {
+    res.json(await listEventTypes(s.calcomApiKey));
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
 });
 
 router.delete("/calendar", async (_req, res): Promise<void> => {

@@ -17,4 +17,6 @@ export const MessageDeliveryStatus = {
   sent: 'sent',
   failed: 'failed',
   received: 'received',
+  bounced: 'bounced',
+  blocked: 'blocked',
 } as const;

@@ -5,6 +5,7 @@
  * Outreach Autopilot API
  * OpenAPI spec version: 0.1.0
  */
+import type { LeadEmailStatus } from './leadEmailStatus';
 import type { LeadStatus } from './leadStatus';
 
 export interface Lead {
@@ -58,6 +59,27 @@ export interface Lead {
   companyLocation?: string | null;
   /** @nullable */
   companyLinkedinUrl?: string | null;
+  /** @nullable */
+  ownerId?: number | null;
+  /** @nullable */
+  ownerName?: string | null;
+  /**
+     * Result of the email check; null = not checked
+     * @nullable
+     */
+  emailStatus?: LeadEmailStatus;
+  /**
+     * IANA time zone of the person
+     * @nullable
+     */
+  timezone?: string | null;
+  /**
+     * Buying signals, one per line
+     * @nullable
+     */
+  signals?: string | null;
+  /** @nullable */
+  signalsAt?: Date | null;
   /** @nullable */
   lastContactedAt?: Date | null;
   createdAt: Date;

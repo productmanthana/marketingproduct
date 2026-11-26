@@ -113,7 +113,14 @@ export async function sendEmail(args: {
   const base = baseUrl(args.settings);
   const unsubUrl = base ? `${base}/api/unsubscribe/${args.lead.unsubscribeToken}` : null;
   let text = args.body;
-  let html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5">${escapeHtml(args.body).replace(/\n/g, "<br>")}</div>`;
+  // Links become clickable; with tracking on they go through /api/c/<token> so clicks are counted.
+  const track = !!base && args.settings.trackOpens;
+  const linked = escapeHtml(args.body).replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)"']/g, (url) => {
+    const raw = url.replace(/&amp;/g, "&");
+    const href = track ? `${base}/api/c/${args.trackingToken}?u=${encodeURIComponent(raw)}` : url;
+    return `<a href="${href.replace(/&(?!amp;)/g, "&amp;")}">${url}</a>`;
+  });
+  let html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5">${linked.replace(/\n/g, "<br>")}</div>`;
   if (unsubUrl && args.settings.unsubscribeFooter) {
     text += `\n\n--\nDon't want to hear from me? Unsubscribe: ${unsubUrl}`;
     html += `<p style="font-size:11px;color:#888;margin-top:24px">Don't want to hear from me? <a href="${unsubUrl}">Unsubscribe</a></p>`;

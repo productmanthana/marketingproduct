@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, ilike, inArray, isNull, or, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, type SQL } from "drizzle-orm";
 import {
   db,
   activitiesTable,
@@ -28,6 +28,7 @@ import {
   UpdateLeadResponse,
 } from "@workspace/api-zod";
 import { qualifyLead, researchCompany } from "../lib/ai";
+import { htmlToText, websiteFor } from "../lib/web";
 import { serializeTasks } from "./tasks";
 import { apolloKey, enrichOrganization } from "../lib/apollo";
 import { logger } from "../lib/logger";
@@ -52,6 +53,8 @@ router.get("/leads", async (req, res): Promise<void> => {
   const conds: SQL[] = [];
   if (q.data.status) conds.push(eq(leadsTable.status, q.data.status));
   if (q.data.campaignId) conds.push(eq(leadsTable.campaignId, q.data.campaignId));
+  if (q.data.ownerId) conds.push(eq(leadsTable.ownerId, q.data.ownerId));
+  if (q.data.hasSignals) conds.push(isNotNull(leadsTable.signals));
   if (q.data.search) {
     const s = `%${q.data.search}%`;
     conds.push(
@@ -104,25 +107,6 @@ router.post("/leads/import", async (req, res): Promise<void> => {
     ImportLeadsResponse.parse({ imported: valid.length, skipped: parsed.data.leads.length - valid.length }),
   );
 });
-
-const FREE_MAIL = /@(gmail|googlemail|yahoo|hotmail|outlook|live|icloud|me|aol|proton|protonmail|gmx|yandex|zoho)\./i;
-
-function websiteFor(lead: typeof leadsTable.$inferSelect): string | null {
-  if (lead.website?.trim()) return /^https?:\/\//.test(lead.website) ? lead.website.trim() : `https://${lead.website.trim()}`;
-  if (lead.email && !FREE_MAIL.test(lead.email)) return `https://${lead.email.split("@")[1]}`;
-  return null;
-}
-
-function htmlToText(html: string): string {
-  return html
-    .replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 
 type LeadRowT = typeof leadsTable.$inferSelect;
 
@@ -305,6 +289,8 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     changes.currentStep = 0;
     changes.nextStepAt = null;
   }
+  // A changed address has to be checked again before the next email.
+  if (parsed.data.email !== undefined && parsed.data.email !== before.email) Object.assign(changes, { emailStatus: null, emailCheckedAt: null });
   // A new wait for message 1 is picked up on the next run, before anything was sent.
   if (parsed.data.firstWaitHours !== undefined && before.currentStep === 0) changes.nextStepAt = null;
   const [lead] = await db

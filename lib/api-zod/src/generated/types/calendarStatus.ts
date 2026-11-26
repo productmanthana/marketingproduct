@@ -5,6 +5,7 @@
  * Outreach Autopilot API
  * OpenAPI spec version: 0.1.0
  */
+import type { CalendarStatusProvider } from './calendarStatusProvider';
 
 export interface CalendarStatus {
   /** Google OAuth client id and secret are set */
@@ -15,4 +16,11 @@ export interface CalendarStatus {
   meetingEndHour: number;
   meetingMinutes: number;
   timezone: string;
+  /** Which calendar the AI books on */
+  provider?: CalendarStatusProvider;
+  calcomConnected?: boolean;
+  /** @nullable */
+  calcomEventTypeId?: number | null;
+  /** @nullable */
+  calcomEventLength?: number | null;
 }

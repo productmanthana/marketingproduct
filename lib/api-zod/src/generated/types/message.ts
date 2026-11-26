@@ -25,5 +25,12 @@ export interface Message {
   deliveryError?: string | null;
   /** @nullable */
   openedAt?: Date | null;
+  /** @nullable */
+  clickedAt?: Date | null;
+  clickCount?: number;
+  /** @nullable */
+  stepOrder?: number | null;
+  /** @nullable */
+  variant?: string | null;
   createdAt: Date;
 }

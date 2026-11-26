@@ -1,3 +1,4 @@
+import { guessTimezone } from "../lib/timezones";
 import { Router, type IRouter } from "express";
 import { eq, inArray } from "drizzle-orm";
 import { campaignsTable, db, leadsTable } from "@workspace/db";
@@ -94,6 +95,7 @@ router.post("/prospects/import", async (req, res): Promise<void> => {
           companyLinkedinUrl: org?.companyLinkedinUrl ?? null,
           notes: placeOf(p) ? `Based in ${placeOf(p)}` : null,
           apolloId: p.id,
+          timezone: guessTimezone(placeOf(p) ?? org?.companyLocation),
           campaignId: parsed.data.campaignId ?? null,
         };
       });

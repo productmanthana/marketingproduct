@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Channel } from './channel';
+import type { SequenceStepUpdateAbWinner } from './sequenceStepUpdateAbWinner';
 
 export interface SequenceStepUpdate {
   channel?: Channel;
@@ -15,4 +16,10 @@ export interface SequenceStepUpdate {
   subject?: string;
   template?: string;
   stepOrder?: number;
+  /** @nullable */
+  variantSubject?: string | null;
+  /** @nullable */
+  variantTemplate?: string | null;
+  /** @nullable */
+  abWinner?: SequenceStepUpdateAbWinner;
 }

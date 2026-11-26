@@ -28,4 +28,8 @@ export interface LeadUpdate {
      * @nullable
      */
   firstWaitHours?: number | null;
+  /** @nullable */
+  ownerId?: number | null;
+  /** @nullable */
+  timezone?: string | null;
 }

@@ -8,9 +8,11 @@ import {
   leadsTable,
   outreachConversationsTable,
   outreachMessagesTable,
+  objectionsTable,
   sequenceStepsTable,
   settingsTable,
   tasksTable,
+  teamMembersTable,
   type CallRow,
   type CampaignRow,
   type ConversationRow,
@@ -22,7 +24,12 @@ import { analyzeAndDraftReply, personalizeMessage } from "./ai";
 import { hasEmailCapacity, linkedinQuotaLeft, sendEmail, sendLinkedIn, unipileConfigured } from "./delivery";
 import { logger } from "./logger";
 import { ensureDealForBookedLead } from "./crm";
-import { bookMeeting, calendarConnected, findFreeSlots } from "./calendar";
+import { schedulerFor } from "./scheduling";
+import { recordMeeting } from "./meetings";
+import { suppressLead, suppressionFor } from "./suppression";
+import { verifyLead } from "./email-check";
+import { contentFor, maybePickWinner, variantFor } from "./ab-test";
+import { guessTimezone } from "./timezones";
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -46,7 +53,7 @@ export async function getSettings(): Promise<SettingsRow> {
 
 /** Settings as the API returns them: provider keys are never sent back, only whether they are set. */
 export function publicSettings(s: SettingsRow) {
-  const { unipileApiKey, voiceApiKey, googleRefreshToken: _g, ...rest } = s;
+  const { unipileApiKey, voiceApiKey, googleRefreshToken: _g, calcomApiKey: _c, ...rest } = s;
   return {
     ...rest,
     unipileConnected: unipileConfigured(s),
@@ -54,12 +61,12 @@ export function publicSettings(s: SettingsRow) {
   };
 }
 
-/** True when the current time is inside the configured sending window (hour range and weekdays, in the chosen time zone). */
-export function withinSendWindow(s: SettingsRow, now = new Date()): boolean {
+/** True when the current time is inside the configured sending window (hour range and weekdays, in the chosen time zone, or `tz` when given). */
+export function withinSendWindow(s: SettingsRow, now = new Date(), tz?: string | null): boolean {
   let hour: number;
   let weekday: string;
   try {
-    const parts = new Intl.DateTimeFormat("en-US", { timeZone: s.timezone || "UTC", hour: "numeric", hourCycle: "h23", weekday: "short" }).formatToParts(now);
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz || s.timezone || "UTC", hour: "numeric", hourCycle: "h23", weekday: "short" }).formatToParts(now);
     hour = Number(parts.find((p) => p.type === "hour")?.value ?? now.getUTCHours());
     weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
   } catch {
@@ -118,8 +125,13 @@ export async function serializeLeads(leads: LeadRow[]) {
     ? await db.select({ id: accountsTable.id, name: accountsTable.name }).from(accountsTable).where(inArray(accountsTable.id, accountIds))
     : [];
   const accountNames = new Map(accounts.map((a) => [a.id, a.name]));
+  const ownerIds = [...new Set(leads.map((l) => l.ownerId).filter((x): x is number => x != null))];
+  const owners = ownerIds.length
+    ? await db.select({ id: teamMembersTable.id, name: teamMembersTable.name }).from(teamMembersTable).where(inArray(teamMembersTable.id, ownerIds))
+    : [];
   return leads.map((l) => ({
     ...l,
+    ownerName: owners.find((o) => o.id === l.ownerId)?.name ?? null,
     campaignName: l.campaignId != null ? (names.get(l.campaignId) ?? null) : null,
     accountName: l.accountId != null ? (accountNames.get(l.accountId) ?? null) : null,
   }));
@@ -281,8 +293,18 @@ export async function recordOutbound(args: {
   body: string;
   subject: string | null;
   author: "user" | "ai";
+  stepOrder?: number | null;
+  variant?: string | null;
 }) {
   const now = new Date();
+  const channel = args.conversation.channel;
+  // Never contact anyone on the do-not-contact list, and don't email addresses known to be undeliverable.
+  const blocked =
+    (channel === "email" || channel === "linkedin") && (await suppressionFor(args.lead))
+      ? `On the do-not-contact list`
+      : channel === "email" && (args.lead.emailStatus === "invalid" || args.lead.emailStatus === "bounced")
+        ? `Email address is ${args.lead.emailStatus}`
+        : null;
   const [inserted] = await db
     .insert(outreachMessagesTable)
     .values({
@@ -292,9 +314,20 @@ export async function recordOutbound(args: {
       subject: args.subject,
       body: args.body,
       author: args.author,
+      stepOrder: args.stepOrder ?? null,
+      variant: args.variant ?? null,
       createdAt: now,
     })
     .returning();
+  if (blocked) {
+    const [message] = await db
+      .update(outreachMessagesTable)
+      .set({ deliveryStatus: "blocked", deliveryError: blocked })
+      .where(eq(outreachMessagesTable.id, inserted!.id))
+      .returning();
+    await logActivity({ type: "delivery_blocked", description: `Did not contact ${leadName(args.lead)}: ${blocked}`, channel, leadId: args.lead.id });
+    return message!;
+  }
   const settings = await getSettings();
   const delivery =
     args.conversation.channel === "email"
@@ -404,27 +437,31 @@ export async function processInbound(
     .where(eq(outreachMessagesTable.conversationId, conv.id))
     .orderBy(asc(outreachMessagesTable.createdAt), asc(outreachMessagesTable.id));
 
-  const free = calendarConnected(settings)
-    ? await findFreeSlots(settings).catch((err) => {
-        logger.error({ err }, "Could not read Google Calendar availability");
+  const scheduler = schedulerFor(settings);
+  const free = scheduler
+    ? await scheduler.findFreeSlots().catch((err) => {
+        logger.error({ err }, "Could not read calendar availability");
         return null;
       })
     : null;
+  const objections = await db.select().from(objectionsTable);
   const analysis = await analyzeAndDraftReply({
     lead,
     campaign,
     settings,
     channel: conv.channel,
     history,
-    calendar: free && { timezone: free.timezone, summary: free.summary, minutes: settings.meetingMinutes, canBook: true },
+    objections,
+    calendar: free && scheduler && { timezone: free.timezone, summary: free.summary, minutes: scheduler.minutes, canBook: true, inviteNote: scheduler.inviteNote },
   });
 
   const autoEnabled = settings.globalAutoReply && (campaign?.autoReply ?? false);
+  // An objection answered from the approved library is safe to send on its own.
   const risky =
     settings.escalateNegative &&
-    (analysis.sentiment === "negative" || analysis.sentiment === "objection");
+    (analysis.sentiment === "negative" || (analysis.sentiment === "objection" && !analysis.usedApprovedAnswer));
 
-  if (analysis.bookSlot) {
+  if (analysis.bookSlot && scheduler) {
     const start = free?.slots.get(analysis.bookSlot);
     const holdBooking = (reason: string) => {
       analysis.needsHuman = reason;
@@ -434,24 +471,50 @@ export async function processInbound(
     else if (!autoEnabled || risky || analysis.needsHuman) holdBooking(`Prospect agreed to ${analysis.bookSlot} (${free!.timezone}); book it and confirm`);
     else {
       try {
-        const event = await bookMeeting(settings, {
-          start,
-          attendeeEmail: lead.email,
-          attendeeName: leadName(lead),
-          summary: `${settings.companyName} <> ${lead.company || leadName(lead)}`,
-          description: campaign?.goal ? `Intro call: ${campaign.goal}` : "Intro call",
-        });
+        const title = `${settings.companyName} <> ${lead.company || leadName(lead)}`;
+        const event = await scheduler.book({ lead, start, title, description: campaign?.goal ? `Intro call: ${campaign.goal}` : "Intro call" });
+        await recordMeeting({ lead, startsAt: start, minutes: scheduler.minutes, title, link: event.link, provider: scheduler.provider, externalId: event.externalId });
         await logActivity({
           type: "meeting_booked",
-          description: `Booked ${analysis.bookSlot} (${free!.timezone}) with ${leadName(lead)}${event.meetLink ? ` on ${event.meetLink}` : ""}`,
+          description: `Booked ${analysis.bookSlot} (${free!.timezone}) with ${leadName(lead)}${event.link ? ` on ${event.link}` : ""}`,
           channel: conv.channel,
           leadId: lead.id,
         });
       } catch (err) {
-        logger.error({ err }, "Google Calendar booking failed");
+        logger.error({ err }, "Calendar booking failed");
         holdBooking(`Could not book ${analysis.bookSlot}: ${(err as Error).message}`);
       }
     }
+  }
+
+  // ---- reply sorting: act on the type of reply ----
+  if (analysis.sentiment === "out_of_office") {
+    const back = analysis.returnDate && /^\d{4}-\d{2}-\d{2}$/.test(analysis.returnDate) ? new Date(`${analysis.returnDate}T09:00:00Z`) : null;
+    const resumeAt = back && back.getTime() > Date.now() ? new Date(back.getTime() + DAY_MS) : new Date(Date.now() + 7 * DAY_MS);
+    // Away messages are not real replies: the sequence continues once they are back.
+    await db.update(leadsTable).set({ status: "contacted", nextStepAt: resumeAt }).where(eq(leadsTable.id, lead.id));
+    await db
+      .update(outreachConversationsTable)
+      .set({ status: "snoozed", sentiment: "out_of_office", unread: false })
+      .where(eq(outreachConversationsTable.id, conv.id));
+    await logActivity({
+      type: "reply_sorted",
+      description: `${leadName(lead)} is out of office; sequence resumes ${resumeAt.toISOString().slice(0, 10)}`,
+      channel: conv.channel,
+      leadId: lead.id,
+    });
+    return;
+  }
+  if (analysis.sentiment === "unsubscribe" || analysis.leadStatus === "unsubscribed") {
+    await suppressLead(lead, "asked to stop").catch((err) => logger.error({ err }, "Could not add to do-not-contact list"));
+  }
+  if (analysis.sentiment === "not_now") {
+    const days = Math.min(365, Math.max(7, Math.round(Number(analysis.followUpDays) || 90)));
+    analysis.leadStatus = "nurture";
+    await createTask({ title: `Reconnect with ${leadName(lead)} (asked to talk later)`, leadId: lead.id, dueAt: new Date(Date.now() + days * DAY_MS), source: "follow_up" });
+  }
+  if (analysis.sentiment === "referral" && analysis.referral?.firstName) {
+    await addReferral(lead, analysis.referral, campaign?.id ?? null).catch((err) => logger.error({ err }, "Could not add referral"));
   }
 
   await db
@@ -476,7 +539,7 @@ export async function processInbound(
       .where(eq(outreachConversationsTable.id, conv.id));
     await logActivity({
       type: "ai_reply",
-      description: `AI replied to ${leadName(lead)} (${analysis.sentiment})`,
+      description: `AI replied to ${leadName(lead)} (${analysis.sentiment.replace("_", " ")})`,
       channel: conv.channel,
       leadId: lead.id,
     });
@@ -490,7 +553,7 @@ export async function processInbound(
       await createTask({
         title: analysis.needsHuman
           ? `Reply to ${leadName(lead)} on ${conv.channel}: ${analysis.needsHuman}`
-          : `Review ${analysis.sentiment} reply from ${leadName(lead)} on ${conv.channel}`,
+          : `Review ${analysis.sentiment.replace("_", " ")} reply from ${leadName(lead)} on ${conv.channel}`,
         leadId: lead.id,
         dueAt: new Date(Date.now() + DAY_MS),
         source: "review",
@@ -506,6 +569,35 @@ export async function processInbound(
   }
 }
 
+/** Adds the person a prospect referred us to as a new lead in the same campaign (unless they already exist). */
+async function addReferral(from: LeadRow, ref: { firstName: string; lastName?: string | null; email?: string | null; title?: string | null }, campaignId: number | null) {
+  const email = ref.email?.trim().toLowerCase() || null;
+  if (email) {
+    const [existing] = await db.select({ id: leadsTable.id }).from(leadsTable).where(sql`lower(${leadsTable.email}) = ${email}`).limit(1);
+    if (existing) return;
+  }
+  const [created] = await db
+    .insert(leadsTable)
+    .values({
+      firstName: ref.firstName.trim(),
+      lastName: ref.lastName?.trim() || "",
+      email,
+      title: ref.title?.trim() || null,
+      company: from.company,
+      website: from.website,
+      industry: from.industry,
+      companyLocation: from.companyLocation,
+      accountId: from.accountId,
+      ownerId: from.ownerId,
+      timezone: from.timezone,
+      // Without an email the referral can't be sequenced yet; keep it out of the campaign until one is added.
+      campaignId: email ? campaignId : null,
+      notes: `Referred by ${leadName(from)}${from.title ? ` (${from.title})` : ""}. Mention them in the first message.`,
+    })
+    .returning();
+  await logActivity({ type: "lead_added", description: `${leadName(from)} referred ${leadName(created!)}; added as a new lead`, leadId: created!.id });
+}
+
 // ---------- campaign execution ----------
 
 async function executeStepForLead(
@@ -516,6 +608,12 @@ async function executeStepForLead(
 ): Promise<"message" | "call" | "none"> {
   const step = steps[lead.currentStep];
   if (!step) return "none";
+  // Do-not-contact list: stop this person's sequence entirely.
+  if (await suppressionFor(lead)) {
+    await db.update(leadsTable).set({ status: "unsubscribed", nextStepAt: null }).where(eq(leadsTable.id, lead.id));
+    await logActivity({ type: "delivery_blocked", description: `${leadName(lead)} is on the do-not-contact list; sequence stopped`, leadId: lead.id });
+    return "none";
+  }
   // Hold the lead (without advancing) when today's sending capacity for this channel is used up.
   if (step.channel === "email" && lead.email && !(await hasEmailCapacity())) return "none";
   if (step.channel === "linkedin" && lead.linkedinUrl && !(await linkedinQuotaLeft(settings))) return "none";
@@ -539,17 +637,36 @@ async function executeStepForLead(
   } else {
     if (step.channel === "email" && !lead.email) return skipStep(lead, steps);
     if (step.channel === "linkedin" && !lead.linkedinUrl) return skipStep(lead, steps);
+    if (step.channel === "email") {
+      // Check the address once before the first email; skip email steps for undeliverable ones.
+      const status = lead.emailStatus ?? (await verifyLead(lead).catch(() => null));
+      if (status === "invalid" || status === "bounced") return skipStep(lead, steps);
+    }
+    const variant = variantFor(step, lead.id);
+    const content = contentFor(step, variant);
     const msg = await personalizeMessage({
       lead,
       campaign,
       settings,
       channel: step.channel,
-      subject: step.subject,
-      template: step.template,
+      subject: content.subject,
+      template: content.template,
       stepNumber: step.stepOrder,
     });
     const conv = await getOrCreateConversation(lead, step.channel, campaign.id, msg.subject);
-    await recordOutbound({ conversation: conv, lead, body: msg.body, subject: msg.subject, author: "ai" });
+    await recordOutbound({
+      conversation: conv,
+      lead,
+      body: msg.body,
+      subject: msg.subject,
+      author: "ai",
+      stepOrder: step.stepOrder,
+      variant: step.variantTemplate ? variant : null,
+    });
+    if (step.variantTemplate && !step.abWinner) {
+      const winner = await maybePickWinner(step, campaign.name).catch(() => null);
+      if (winner) step.abWinner = winner;
+    }
     await logActivity({
       type: "message_sent",
       description: `Step ${step.stepOrder} ${step.channel === "email" ? "email" : "LinkedIn message"} sent to ${leadName(lead)}`,
@@ -619,7 +736,12 @@ async function scheduleFirstMessages(
   return leads.filter((l) => !later.has(l.id));
 }
 
-export async function runCampaign(campaignId: number) {
+/** The time zone a person's sequence steps follow: theirs (set or guessed from their location) when enabled, else the account's. */
+export function leadTimezone(lead: LeadRow, s: SettingsRow): string {
+  return (s.sendInLeadTimezone && (lead.timezone || guessTimezone(lead.companyLocation))) || s.timezone || "UTC";
+}
+
+export async function runCampaign(campaignId: number, opts: { respectWindow?: boolean } = {}) {
   const [campaign] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, campaignId));
   if (!campaign) throw new Error("Campaign not found");
   const steps = await loadSteps(campaignId);
@@ -638,8 +760,9 @@ export async function runCampaign(campaignId: number) {
         or(isNull(leadsTable.nextStepAt), lte(leadsTable.nextStepAt, new Date())),
       ),
     );
+  const now = new Date();
   const eligible = await scheduleFirstMessages(
-    dueLeads.filter((l) => l.currentStep < steps.length),
+    dueLeads.filter((l) => l.currentStep < steps.length && (!opts.respectWindow || withinSendWindow(settings, now, leadTimezone(l, settings)))),
     campaign,
     steps,
   );
@@ -668,10 +791,12 @@ export function startScheduler(): void {
     if (running) return;
     running = true;
     try {
-      if (!withinSendWindow(await getSettings())) return;
+      const settings = await getSettings();
+      // With per-person time zones the window is checked for each person instead.
+      if (!settings.sendInLeadTimezone && !withinSendWindow(settings)) return;
       const active = await db.select().from(campaignsTable).where(eq(campaignsTable.status, "active"));
       for (const c of active) {
-        const result = await runCampaign(c.id);
+        const result = await runCampaign(c.id, { respectWindow: true });
         if (result.leadsProcessed > 0) {
           logger.info({ campaignId: c.id, ...result }, "Scheduled campaign run");
         }

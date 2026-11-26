@@ -38,6 +38,7 @@ import {
 } from "@workspace/api-zod";
 import { generateSequence, personalizeMessage, writePitch } from "../lib/ai";
 import { getSettings, runCampaign, serializeCampaigns, serializeLeads } from "../lib/outreach";
+import { variantStats } from "../lib/ab-test";
 
 const router: IRouter = Router();
 
@@ -58,7 +59,12 @@ async function campaignDetail(id: number) {
     .from(leadsTable)
     .where(eq(leadsTable.campaignId, id))
     .orderBy(desc(leadsTable.createdAt));
-  return GetCampaignResponse.parse({ ...base, steps, leads: await serializeLeads(leads) });
+  const stats = await variantStats(id, steps.filter((s) => s.variantTemplate).map((s) => s.stepOrder));
+  return GetCampaignResponse.parse({
+    ...base,
+    steps: steps.map((s) => ({ ...s, abStats: stats.get(s.stepOrder) ?? [] })),
+    leads: await serializeLeads(leads),
+  });
 }
 
 async function campaignSummary(id: number) {
@@ -161,9 +167,12 @@ router.patch("/campaigns/:id/steps/:stepId", async (req, res): Promise<void> => 
     res.status(400).json({ error: (params.error ?? parsed.error)?.message });
     return;
   }
+  const changes = { ...parsed.data };
+  // Removing version B ends the A/B test.
+  if ("variantTemplate" in changes && !changes.variantTemplate?.trim()) Object.assign(changes, { variantTemplate: null, variantSubject: null, abWinner: null });
   const [step] = await db
     .update(sequenceStepsTable)
-    .set(parsed.data)
+    .set(changes)
     .where(
       and(
         eq(sequenceStepsTable.id, params.data.stepId),

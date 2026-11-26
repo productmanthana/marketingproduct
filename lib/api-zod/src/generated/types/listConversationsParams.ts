@@ -11,4 +11,5 @@ import type { ConversationStatus } from './conversationStatus';
 export type ListConversationsParams = {
 channel?: Channel;
 status?: ConversationStatus;
+ownerId?: number;
 };

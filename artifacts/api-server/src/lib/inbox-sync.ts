@@ -5,6 +5,8 @@ import { db, leadsTable, mailboxesTable, outreachMessagesTable, type MailboxRow 
 import { activeMailboxes } from "./delivery";
 import { getOrCreateConversation, processInbound } from "./outreach";
 import { logger } from "./logger";
+import { bouncedRecipients, recordBounce } from "./email-check";
+import { tendWarmupMail, WARMUP_HEADER } from "./warmup";
 
 const FIRST_SYNC_DAYS = 3;
 
@@ -46,6 +48,8 @@ export async function syncMailbox(m: MailboxRow): Promise<number> {
   const client = imapClient(m);
   let processed = 0;
   let maxUid = m.lastUid ?? 0;
+  const warmupUids: number[] = [];
+  const own = (await activeMailboxes()).map((b) => b.fromEmail);
   await client.connect();
   try {
     const lock = await client.getMailboxLock("INBOX");
@@ -58,6 +62,18 @@ export async function syncMailbox(m: MailboxRow): Promise<number> {
         maxUid = Math.max(maxUid, msg.uid);
         if (!msg.source) continue;
         const parsed = await simpleParser(msg.source);
+        if (parsed.headers.has(WARMUP_HEADER)) {
+          warmupUids.push(msg.uid);
+          continue;
+        }
+        const bounced = bouncedRecipients(parsed, own);
+        if (bounced.length) {
+          for (const address of bounced) {
+            const [lead] = await db.select().from(leadsTable).where(ilike(leadsTable.email, address)).limit(1);
+            if (lead) await recordBounce(lead);
+          }
+          continue;
+        }
         const from = parsed.from?.value[0]?.address?.toLowerCase();
         if (!from || from === m.fromEmail.toLowerCase()) continue;
         const messageId = parsed.messageId ?? null;
@@ -76,6 +92,7 @@ export async function syncMailbox(m: MailboxRow): Promise<number> {
     } finally {
       lock.release();
     }
+    if (m.warmupEnabled) await tendWarmupMail(client, m, warmupUids);
   } finally {
     await client.logout().catch(() => undefined);
   }

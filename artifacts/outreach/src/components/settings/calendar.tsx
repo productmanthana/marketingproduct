@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Panel, errMsg } from "@/components/bits";
+import { CalcomSection } from "./calcom";
 
 const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
 const SELECT = "h-9 w-full rounded-md border border-input bg-card px-2 text-sm";
 
-/** Google Calendar connection used by the AI to find free times and book meetings on its own. */
+/** Calendar the AI uses to find free times and book meetings on its own: Cal.com (API key) or Google Calendar. */
 export function CalendarPanel({ delay }: { delay?: number }) {
   const q = useGetCalendar({ query: { queryKey: getGetCalendarQueryKey(), refetchOnWindowFocus: true } });
   const update = useUpdateCalendar();
@@ -32,14 +33,20 @@ export function CalendarPanel({ delay }: { delay?: number }) {
     });
 
   return (
-    <Panel title="Google Calendar auto-scheduling" delay={delay}
-      action={<span className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${c?.connected ? "bg-primary/10 text-primary" : "border border-dashed border-border text-muted-foreground"}`}>{c?.connected ? "Connected" : "Off"}</span>}>
+    <Panel title="Meeting auto-scheduling" delay={delay}
+      action={<span data-testid="text-scheduling-provider" className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${c && c.provider !== "none" ? "bg-primary/10 text-primary" : "border border-dashed border-border text-muted-foreground"}`}>{c?.provider === "calcom" ? "Cal.com" : c?.provider === "google" ? "Google" : "Off"}</span>}>
       <div className="grid gap-3 p-4 text-sm">
         <div className="flex items-start gap-3 text-muted-foreground">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><CalendarCheck className="h-4 w-4" /></div>
-          <p>When a prospect wants to meet, the AI checks your free times, books the slot they ask for (or offers free ones) and sends a Google Calendar invite with a Meet link. No booking link needed.</p>
+          <p>When a prospect wants to meet, the AI checks your free times, books the slot they ask for (or offers free ones) and sends the invite with a meeting link. No booking link needed. Connect one of the two below.</p>
         </div>
 
+        {c && <CalcomSection c={c} />}
+
+        {c?.calcomConnected ? (
+          <p className="text-xs text-muted-foreground">Cal.com is used while it is connected. Disconnect it to book on Google Calendar instead.</p>
+        ) : <>
+        <b className="pt-1">Or Google Calendar</b>
         {!c ? null : !c.configured ? (
           <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900" data-testid="calendar-setup-steps">
             <b>One-time setup (about 5 minutes)</b>
@@ -78,6 +85,7 @@ export function CalendarPanel({ delay }: { delay?: number }) {
           <Button size="sm" variant="outline" disabled={update.isPending || hours.meetingEndHour <= hours.meetingStartHour} data-testid="button-save-meeting-hours"
             onClick={() => update.mutate({ data: hours }, { onSuccess: () => { q.refetch(); toast({ title: "Meeting hours saved" }); } })}>Save hours</Button>
         </div>
+        </>}
       </div>
     </Panel>
   );

@@ -22,4 +22,10 @@ export interface CalendarInput {
      * @maximum 120
      */
   meetingMinutes?: number;
+  /** Write-only; empty keeps the stored key */
+  calcomApiKey?: string;
+  /** @nullable */
+  calcomEventTypeId?: number | null;
+  /** @nullable */
+  calcomEventLength?: number | null;
 }

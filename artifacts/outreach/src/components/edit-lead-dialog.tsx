@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListCampaigns, useUpdateLead } from "@workspace/api-client-react";
+import { useListCampaigns, useListTeam, useUpdateLead } from "@workspace/api-client-react";
 import type { Lead, LeadStatus } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,10 @@ const FIELDS = [
   ["company", "Company"], ["title", "Title"], ["linkedinUrl", "LinkedIn URL"], ["website", "Website"], ["industry", "Industry"],
 ] as const;
 type Key = (typeof FIELDS)[number][0];
-const STATUSES: LeadStatus[] = ["new", "contacted", "replied", "interested", "meeting_booked", "not_interested", "unsubscribed"];
+const STATUSES: LeadStatus[] = ["new", "contacted", "replied", "interested", "meeting_booked", "nurture", "not_interested", "unsubscribed", "bounced"];
+const TIMEZONES = (() => {
+  try { return (Intl as unknown as { supportedValuesOf: (k: string) => string[] }).supportedValuesOf("timeZone"); } catch { return ["UTC"]; }
+})();
 const sel = "h-9 w-full rounded-md border border-input bg-card px-2 text-sm capitalize";
 
 export function EditLeadDialog({ lead, onClose }: { lead: Lead; onClose: () => void }) {
@@ -26,7 +29,10 @@ export function EditLeadDialog({ lead, onClose }: { lead: Lead; onClose: () => v
   const [status, setStatus] = useState<LeadStatus>(lead.status);
   const [campaignId, setCampaignId] = useState(lead.campaignId ? String(lead.campaignId) : "");
   const [notes, setNotes] = useState(lead.notes ?? "");
-  const save = () => upd.mutate({ id: lead.id, data: { ...f, status, notes, campaignId: campaignId ? Number(campaignId) : null } }, {
+  const team = useListTeam();
+  const [ownerId, setOwnerId] = useState(lead.ownerId ? String(lead.ownerId) : "");
+  const [timezone, setTimezone] = useState(lead.timezone ?? "");
+  const save = () => upd.mutate({ id: lead.id, data: { ...f, status, notes, campaignId: campaignId ? Number(campaignId) : null, ownerId: ownerId ? Number(ownerId) : null, timezone: timezone || null } }, {
     onSuccess: () => { refresh(); toast({ title: "Lead updated" }); onClose(); },
     onError: (e) => toast({ title: "Could not update lead", description: errMsg(e), variant: "destructive" }),
   });
@@ -46,6 +52,14 @@ export function EditLeadDialog({ lead, onClose }: { lead: Lead; onClose: () => v
           <div className="space-y-1"><Label className="text-xs">Campaign</Label>
             <select className={sel} value={campaignId} onChange={(e) => setCampaignId(e.target.value)} data-testid="select-edit-campaign">
               <option value="">No campaign</option>{camps.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select></div>
+          <div className="space-y-1"><Label className="text-xs">Owner</Label>
+            <select className={sel} value={ownerId} onChange={(e) => setOwnerId(e.target.value)} data-testid="select-edit-owner">
+              <option value="">Unassigned</option>{team.data?.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select></div>
+          <div className="space-y-1"><Label className="text-xs">Their time zone</Label>
+            <select className={`${sel} normal-case`} value={timezone} onChange={(e) => setTimezone(e.target.value)} data-testid="select-edit-timezone">
+              <option value="">Guess from location</option>{TIMEZONES.map((t) => <option key={t} value={t}>{t}</option>)}
             </select></div>
           <div className="col-span-2 space-y-1"><Label className="text-xs">Notes</Label>
             <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} data-testid="input-edit-notes" /></div>

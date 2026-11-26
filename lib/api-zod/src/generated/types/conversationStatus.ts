@@ -14,4 +14,5 @@ export const ConversationStatus = {
   auto_replied: 'auto_replied',
   needs_review: 'needs_review',
   closed: 'closed',
+  snoozed: 'snoozed',
 } as const;

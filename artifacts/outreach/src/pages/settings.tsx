@@ -12,6 +12,9 @@ import { PageHeader, Panel, Rows, ErrorBox, TONE_OPTIONS, useRefreshAll } from "
 import { MailboxesPanel } from "@/components/settings/mailboxes";
 import { LinkedinPanel, VoicePanel, WebhooksPanel, type IntegrationForm } from "@/components/settings/integrations";
 import { CalendarPanel } from "@/components/settings/calendar";
+import { ObjectionsPanel } from "@/components/settings/objections";
+import { TeamPanel } from "@/components/settings/team";
+import { DoNotContactPanel } from "@/components/settings/do-not-contact";
 import { CURRENCIES } from "@/components/crm/format";
 
 type Form = Required<Omit<Settings, "unipileConnected" | "voiceConnected">> & { unipileApiKey: string; voiceApiKey: string };
@@ -24,6 +27,7 @@ const EMPTY: Form = {
   senderName: "", companyName: "", signature: "", defaultTone: "friendly", globalAutoReply: true, escalateNegative: true,
   icpDescription: "", publicBaseUrl: "", trackOpens: true, unsubscribeFooter: true, sendWindowStart: 8, sendWindowEnd: 18, sendWeekdaysOnly: true, timezone: "UTC",
   unipileDsn: "", unipileApiKey: "", unipileAccountId: "", linkedinDailyLimit: 25, voiceApiBaseUrl: "https://api.vapi.ai", voiceApiKey: "", voicePhoneNumberId: "", voiceName: "", currency: "USD",
+  sendInLeadTimezone: true, bouncePausePercent: 5, meetingReminderHours: 2, warmupPerDay: 10,
 };
 
 export default function SettingsPage() {
@@ -103,7 +107,16 @@ export default function SettingsPage() {
                     {Array.from(new Set(["UTC", f.timezone, ...TIMEZONES])).map((t) => <option key={t}>{t}</option>)}</select></div>
                 </div>
                 <label className="flex items-center justify-between text-sm"><span>Weekdays only</span><Switch checked={f.sendWeekdaysOnly} onCheckedChange={(v) => set("sendWeekdaysOnly", v)} data-testid="switch-weekdays" /></label>
-                <label className="flex items-center justify-between text-sm"><span>Track email opens</span><Switch checked={f.trackOpens} onCheckedChange={(v) => set("trackOpens", v)} data-testid="switch-track-opens" /></label>
+                <label className="flex items-center justify-between gap-3 text-sm"><span>Send in each person's own time zone<span className="block text-xs text-muted-foreground">The window above applies to their local time (set on the person, or guessed from their location), so emails arrive during their working hours.</span></span><Switch checked={f.sendInLeadTimezone} onCheckedChange={(v) => set("sendInLeadTimezone", v)} data-testid="switch-lead-timezone" /></label>
+                <div className="grid grid-cols-3 gap-2">
+                  <div><Label className="text-xs">Pause campaign at bounce rate</Label><select className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm" value={f.bouncePausePercent} onChange={(e) => set("bouncePausePercent", Number(e.target.value))} data-testid="select-bounce-pause">
+                    {[0, 3, 5, 8, 10].map((n) => <option key={n} value={n}>{n ? `${n}%` : "Never"}</option>)}</select></div>
+                  <div><Label className="text-xs">Meeting reminder</Label><select className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm" value={f.meetingReminderHours} onChange={(e) => set("meetingReminderHours", Number(e.target.value))} data-testid="select-reminder-hours">
+                    {[0, 1, 2, 4, 24].map((n) => <option key={n} value={n}>{n ? `${n} h before` : "Off"}</option>)}</select></div>
+                  <div><Label className="text-xs">Warm-up emails / mailbox / day</Label><select className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm" value={f.warmupPerDay} onChange={(e) => set("warmupPerDay", Number(e.target.value))} data-testid="select-warmup-per-day">
+                    {[0, 5, 10, 20, 30].map((n) => <option key={n} value={n}>{n || "Off"}</option>)}</select></div>
+                </div>
+                <label className="flex items-center justify-between text-sm"><span>Track email opens and link clicks</span><Switch checked={f.trackOpens} onCheckedChange={(v) => set("trackOpens", v)} data-testid="switch-track-opens" /></label>
                 <label className="flex items-center justify-between text-sm"><span>Add unsubscribe link to emails</span><Switch checked={f.unsubscribeFooter} onCheckedChange={(v) => set("unsubscribeFooter", v)} data-testid="switch-unsubscribe" /></label>
                 <div><Label className="text-xs">Public app URL (for tracking, unsubscribe links and webhooks)</Label>
                   <Input value={f.publicBaseUrl} onChange={(e) => set("publicBaseUrl", e.target.value)} data-testid="input-public-url" /></div>
@@ -115,6 +128,9 @@ export default function SettingsPage() {
             <CalendarPanel delay={80} />
             <LinkedinPanel f={f as IntegrationForm} set={set} connected={q.data?.unipileConnected} delay={100} />
             <VoicePanel f={f as IntegrationForm} set={set} connected={q.data?.voiceConnected} delay={140} />
+            <ObjectionsPanel delay={160} />
+            <DoNotContactPanel delay={170} />
+            <TeamPanel delay={175} />
             <WebhooksPanel base={base} delay={180} />
             <Panel title="Test the reply loop" delay={220}>
               <div className="space-y-2 p-4 text-sm">

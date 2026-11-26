@@ -4,6 +4,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Toolti
 import { useGetCrmReport } from "@workspace/api-client-react";
 import { PageHeader, Panel, Rows, ErrorBox, Empty, pct } from "@/components/bits";
 import { STAGES, stageMeta, useMoney } from "@/components/crm/format";
+import { OutreachReport } from "@/components/outreach-report";
 
 const monthLabel = (m: string) => new Date(`${m}-01T12:00:00Z`).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
 const AXIS = { fontSize: 11, fill: "hsl(var(--muted-foreground))" };
@@ -30,6 +31,9 @@ export default function Reports() {
     <div>
       <PageHeader eyebrow="CRM · Analytics" title="Reports" />
       <div className="space-y-5 p-6 md:p-8">
+        <h2 className="font-display text-lg font-bold">Outreach</h2>
+        <OutreachReport />
+        <h2 className="pt-2 font-display text-lg font-bold">Pipeline and sales forecast</h2>
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-3 xl:grid-cols-6">
           {kpis.map(([k, v, sub]) => (
             <div key={k} className="bg-card px-4 py-3" data-testid={`report-kpi-${k.toLowerCase().replace(/ /g, "-")}`}>

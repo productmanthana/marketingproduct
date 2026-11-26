@@ -38,9 +38,14 @@ export function MailboxesPanel({ delay = 0 }: { delay?: number }) {
         <div className="p-4 text-sm text-muted-foreground">
           No mailbox connected, so emails are kept in-app only. Add Gmail, Outlook or any SMTP mailbox to send for real; add IMAP to detect replies automatically.
         </div>
-      ) : (
+      ) : (<>
         <div className="divide-y divide-border">{q.data.map((m) => <MailboxRow key={m.id} m={m} onEdit={() => setEdit(m)} />)}</div>
-      )}
+        <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground" data-testid="text-mailbox-rotation">
+          {q.data.filter((m) => m.active).length > 1
+            ? "Campaign emails are spread across your active mailboxes: each thread stays on its mailbox, new ones go to the least-used. Warm-up mailboxes also email each other daily and rescue those emails from spam, so your mail keeps landing in inboxes."
+            : "Add a second mailbox to spread sending across mailboxes and to switch on warm-up (your mailboxes email each other daily and rescue those emails from spam)."}
+        </p>
+      </>)}
       {edit && <MailboxDialog mailbox={edit === "new" ? null : edit} onClose={() => setEdit(null)} />}
     </Panel>
   );
@@ -64,6 +69,13 @@ function MailboxRow({ m, onEdit }: { m: Mailbox; onEdit: () => void }) {
           {m.warmupEnabled && m.todayLimit < m.dailyLimit && <span>warming up to {m.dailyLimit}</span>}
           {m.imapHost ? <span>· replies synced {ago(m.lastSyncAt)}</span> : <span>· no reply sync</span>}
         </div>
+        {m.warmupEnabled && (
+          <div className="mt-1 text-xs text-muted-foreground" data-testid={`text-warmup-${m.id}`}>
+            Warm-up: {m.warmupSentToday ?? 0} sent today
+            {(m.warmupReceived ?? 0) > 0 && <> · {m.warmupReceived} received, {Math.round(100 - ((m.warmupSpam ?? 0) / (m.warmupReceived ?? 1)) * 100)}% landed in inbox</>}
+            {(m.warmupSpam ?? 0) > 0 && <> · {m.warmupSpam} rescued from spam</>}
+          </div>
+        )}
         {m.lastError && <div className="mt-1 truncate text-xs text-destructive">{m.lastError}</div>}
       </button>
       <Button size="sm" variant="outline" disabled={test.isPending} data-testid={`button-test-mailbox-${m.id}`}

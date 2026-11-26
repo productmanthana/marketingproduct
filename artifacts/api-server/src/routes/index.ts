@@ -13,6 +13,8 @@ import accountsRouter from "./accounts";
 import dealsRouter from "./deals";
 import crmRouter from "./crm";
 import calendarRouter from "./calendar";
+import growthRouter from "./growth";
+import quotesRouter from "./quotes";
 
 const router: IRouter = Router();
 
@@ -30,5 +32,7 @@ router.use(accountsRouter);
 router.use(dealsRouter);
 router.use(crmRouter);
 router.use(calendarRouter);
+router.use(growthRouter);
+router.use(quotesRouter);
 
 export default router;

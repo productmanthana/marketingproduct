@@ -364,10 +364,34 @@ function StepRow({ s, i, last, campaignId, prev, next, onEdit, onPreview }: { s:
             <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-destructive" disabled={del.isPending} onClick={() => del.mutate({ id: campaignId, stepId: s.id }, { onSuccess: refresh })} data-testid={`button-step-delete-${s.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
           </div>
         </div>
+        {s.variantTemplate && <div className="mt-1.5 font-mono text-[10px] uppercase tracking-wider text-primary">Version A</div>}
         {s.subject && <div className="mt-1.5 text-sm font-semibold">{s.subject}</div>}
         <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm text-muted-foreground">{s.template}</p>
+        {s.variantTemplate && <AbTest s={s} />}
       </div>
     </li>
+  );
+}
+
+const rate = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "-");
+
+/** Version B of a step and how both versions perform. */
+function AbTest({ s }: { s: SequenceStep }) {
+  const stats = s.abStats ?? [];
+  return (
+    <div className="mt-3 space-y-2 border-t border-dashed border-border pt-3" data-testid={`ab-test-${s.id}`}>
+      <div className="font-mono text-[10px] uppercase tracking-wider text-primary">Version B</div>
+      {s.variantSubject && <div className="text-sm font-semibold">{s.variantSubject}</div>}
+      <p className="line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">{s.variantTemplate}</p>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {stats.map((v) => (
+          <span key={v.variant} className={`rounded-md border px-2 py-1 ${s.abWinner === v.variant ? "border-primary bg-primary/10 text-primary" : "border-border"}`} data-testid={`ab-stat-${s.id}-${v.variant}`}>
+            <b>{v.variant.toUpperCase()}</b> · {v.sent} sent · {rate(v.opened, v.sent)} opens · {rate(v.replied, v.sent)} replies{s.abWinner === v.variant && " · winner"}
+          </span>
+        ))}
+        <span className="text-muted-foreground">{s.abWinner ? "Everyone now gets the winner." : "Half get A, half get B. The better one wins after 30 sends each."}</span>
+      </div>
+    </div>
   );
 }
 
@@ -376,11 +400,19 @@ function StepDialog({ campaignId, step, onClose }: { campaignId: number; step: S
   const upd = useUpdateSequenceStep();
   const refresh = useRefreshAll();
   const [f, setF] = useState({ channel: (step?.channel ?? "email") as Ch, wait: { delayDays: step?.delayDays ?? 1, delayHours: step?.delayHours ?? 0 }, subject: step?.subject ?? "", template: step?.template ?? "" });
+  const [ab, setAb] = useState({ on: !!step?.variantTemplate, subject: step?.variantSubject ?? "", template: step?.variantTemplate ?? "" });
   const pending = add.isPending || upd.isPending;
+  const testing = ab.on && f.channel !== "call" && !!ab.template.trim();
   const save = () => {
     const data = { channel: f.channel, ...f.wait, subject: f.channel === "email" ? f.subject : undefined, template: f.template };
-    const done = { onSuccess: () => { refresh(); onClose(); } };
-    if (step) upd.mutate({ id: campaignId, stepId: step.id, data }, done); else add.mutate({ id: campaignId, data }, done);
+    // Changing version B restarts the test.
+    const changedB = ab.template !== (step?.variantTemplate ?? "") || ab.subject !== (step?.variantSubject ?? "");
+    const variant = testing
+      ? { variantTemplate: ab.template, variantSubject: f.channel === "email" ? ab.subject || null : null, ...(changedB ? { abWinner: null } : {}) }
+      : { variantTemplate: null };
+    const done = () => { refresh(); onClose(); };
+    if (step) upd.mutate({ id: campaignId, stepId: step.id, data: { ...data, ...variant } }, { onSuccess: done });
+    else add.mutate({ id: campaignId, data }, { onSuccess: (created) => testing ? upd.mutate({ id: campaignId, stepId: created.id, data: variant }, { onSuccess: done }) : done() });
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -401,6 +433,16 @@ function StepDialog({ campaignId, step, onClose }: { campaignId: number; step: S
           <div><Label className="text-xs">{f.channel === "call" ? "What should this call achieve?" : "Message"}</Label>
             <Textarea rows={7} value={f.template} onChange={(e) => setF({ ...f, template: e.target.value })} placeholder="Hi {{firstName}}, noticed {{company}}..." data-testid="input-step-template" />
             <p className="mt-1 text-xs text-muted-foreground">{"Write it roughly; the AI polishes and personalises it for each person. Tip: {{firstName}} and {{company}} are replaced with their name and company."}</p></div>
+          {f.channel !== "call" && (
+            <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
+              <label className="flex items-center justify-between text-sm"><span><b>A/B test</b><span className="block text-xs text-muted-foreground">Try a second version. Half get A, half get B; after 30 sends each the one with more replies wins.</span></span>
+                <Switch checked={ab.on} onCheckedChange={(v) => setAb({ ...ab, on: v })} data-testid="switch-step-ab" /></label>
+              {ab.on && <>
+                {f.channel === "email" && <div><Label className="text-xs">Subject B</Label><Input value={ab.subject} onChange={(e) => setAb({ ...ab, subject: e.target.value })} placeholder="Leave empty to test only the message" data-testid="input-step-subject-b" /></div>}
+                <div><Label className="text-xs">Message B</Label><Textarea rows={5} value={ab.template} onChange={(e) => setAb({ ...ab, template: e.target.value })} data-testid="input-step-template-b" /></div>
+              </>}
+            </div>
+          )}
         </div>
         <DialogFooter><Button onClick={save} disabled={!f.template.trim() || pending} data-testid="button-save-step">{pending ? "Saving..." : "Save message"}</Button></DialogFooter>
       </DialogContent>

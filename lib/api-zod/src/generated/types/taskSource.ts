@@ -14,4 +14,6 @@ export const TaskSource = {
   call_summary: 'call_summary',
   ai_reply: 'ai_reply',
   review: 'review',
+  follow_up: 'follow_up',
+  meeting: 'meeting',
 } as const;

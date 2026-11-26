@@ -17,6 +17,8 @@ import { CloseDealDialog } from "@/components/crm/close-deal-dialog";
 import { fromDateInput, isClosedStage, shortDate, toDateInput, useMoney } from "@/components/crm/format";
 import { StageBadge } from "@/pages/pipeline";
 import { AddTask, TaskRow } from "@/pages/tasks";
+import { QuotesPanel } from "@/components/crm/quotes-panel";
+import { MeetingsPanel } from "@/components/meetings";
 
 const SELECT = "h-9 w-full rounded-md border border-input bg-card px-2 text-sm";
 
@@ -153,6 +155,8 @@ export default function DealDetail() {
             {!d.tasks.length ? <div className="p-4"><Empty icon={CheckSquare} title="No tasks" body="Add the follow-ups that move this deal forward." /></div> :
               <div className="divide-y divide-border">{d.tasks.map((t) => <TaskRow key={t.id} t={t} showDeal={false} />)}</div>}
           </Panel>
+          <QuotesPanel dealId={id} dealName={d.name} delay={60} />
+          <MeetingsPanel dealId={id} delay={70} />
           <NotesPanel notes={d.notes} dealId={id} delay={80} />
           <Panel title="Activity" delay={120}><Timeline activity={d.activity} /></Panel>
         </div>

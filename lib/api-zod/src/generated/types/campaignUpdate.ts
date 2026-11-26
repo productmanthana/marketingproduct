@@ -20,5 +20,7 @@ export interface CampaignUpdate {
      * @minimum 0
      */
   sendGapMinutes?: number;
+  /** @minimum 0 */
+  cost?: number;
   status?: CampaignStatus;
 }

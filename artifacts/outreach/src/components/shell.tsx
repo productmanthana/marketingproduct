@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutGrid, Send, Users, Inbox, PhoneCall, Settings, Radar, CheckSquare, Telescope, KanbanSquare, Building2, BarChart3 } from "lucide-react";
+import { LayoutGrid, Send, Users, Inbox, PhoneCall, Settings, Radar, CheckSquare, Telescope, KanbanSquare, Building2, BarChart3, CalendarClock } from "lucide-react";
+import { ViewingAsSelect } from "@/components/viewing-as";
 import { GlobalSearch } from "@/components/global-search";
 import { useGetDashboardSummary, useGetSettings } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,7 @@ const NAV = [
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/inbox", label: "Inbox", icon: Inbox, badge: "needsReview" as const },
   { href: "/calls", label: "Calls", icon: PhoneCall },
+  { href: "/meetings", label: "Meetings", icon: CalendarClock },
   { href: "/tasks", label: "Tasks", icon: CheckSquare, badge: "openTasks" as const },
   { href: "/pipeline", label: "Pipeline", icon: KanbanSquare, group: "CRM" },
   { href: "/accounts", label: "Accounts", icon: Building2 },
@@ -35,6 +37,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <GlobalSearch />
+        <ViewingAsSelect />
         <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:overflow-y-auto md:pb-0">
           {NAV.map((n) => {
             const active = n.href === "/" ? loc === "/" : loc.startsWith(n.href) || (n.href === "/pipeline" && loc.startsWith("/deals"));
