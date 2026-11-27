@@ -11,7 +11,7 @@ import { tendWarmupMail, WARMUP_HEADER } from "./warmup";
 const FIRST_SYNC_DAYS = 3;
 
 function imapClient(m: MailboxRow): ImapFlow {
-  return new ImapFlow({
+  const client = new ImapFlow({
     host: m.imapHost!,
     port: m.imapPort,
     secure: m.imapSecure,
@@ -19,6 +19,9 @@ function imapClient(m: MailboxRow): ImapFlow {
     logger: false,
     socketTimeout: 30_000,
   });
+  // A dropped/idle connection emits "error"; without a listener Node crashes the whole server.
+  client.on("error", (err) => logger.warn({ err: (err as Error).message, mailbox: m.id }, "IMAP connection error"));
+  return client;
 }
 
 export async function verifyImap(m: MailboxRow): Promise<void> {
