@@ -2200,6 +2200,9 @@ components:
         bouncePausePercent: { type: integer, minimum: 0, maximum: 100 }
         meetingReminderHours: { type: integer, minimum: 0, maximum: 72 }
         warmupPerDay: { type: integer, minimum: 0, maximum: 50 }
+        autoDialEnabled: { type: boolean, description: "Dial queued calls automatically inside the send window" }
+        callDailyLimit: { type: integer, minimum: 1, maximum: 1000 }
+        callConcurrency: { type: integer, minimum: 1, maximum: 10 }
     CalendarStatus:
       type: object
       required: [configured, connected, email, meetingStartHour, meetingEndHour, meetingMinutes, timezone]
@@ -2272,6 +2275,9 @@ components:
         bouncePausePercent: { type: integer, minimum: 0, maximum: 100 }
         meetingReminderHours: { type: integer, minimum: 0, maximum: 72 }
         warmupPerDay: { type: integer, minimum: 0, maximum: 50 }
+        autoDialEnabled: { type: boolean, description: "Dial queued calls automatically inside the send window" }
+        callDailyLimit: { type: integer, minimum: 1, maximum: 1000 }
+        callConcurrency: { type: integer, minimum: 1, maximum: 10 }
 
     Mailbox:
       type: object

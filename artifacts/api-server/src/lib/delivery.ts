@@ -186,7 +186,7 @@ export function linkedinIdentifier(url: string): string | null {
 }
 
 /** Counts one action against a per-day limit; returns false when the limit is reached. */
-async function takeDailyQuota(key: string, limit: number): Promise<boolean> {
+export async function takeDailyQuota(key: string, limit: number): Promise<boolean> {
   const day = today();
   const [row] = await db.select().from(usageCountersTable).where(eq(usageCountersTable.key, key));
   const used = row && row.day === day ? row.count : 0;

@@ -51,4 +51,16 @@ export interface Settings {
      * @maximum 50
      */
   warmupPerDay?: number;
+  /** Dial queued calls automatically inside the send window */
+  autoDialEnabled?: boolean;
+  /**
+     * @minimum 1
+     * @maximum 1000
+     */
+  callDailyLimit?: number;
+  /**
+     * @minimum 1
+     * @maximum 10
+     */
+  callConcurrency?: number;
 }

@@ -4,6 +4,7 @@ import { startScheduler } from "./lib/outreach";
 import { startInboxSync } from "./lib/inbox-sync";
 import { startMeetingAutomation } from "./lib/meetings";
 import { startWarmup } from "./lib/warmup";
+import { startAutoDialer } from "./lib/auto-dialer";
 
 const rawPort = process.env["PORT"];
 
@@ -30,4 +31,5 @@ app.listen(port, (err) => {
   startInboxSync();
   startMeetingAutomation();
   startWarmup();
+  startAutoDialer();
 });

@@ -3,12 +3,14 @@ import { useTestIntegration } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Panel, chColor } from "@/components/bits";
 
 export type IntegrationForm = {
   unipileDsn: string; unipileApiKey: string; unipileAccountId: string; linkedinDailyLimit: number;
   voiceApiBaseUrl: string; voiceApiKey: string; voicePhoneNumberId: string; voiceName: string;
+  autoDialEnabled: boolean; callDailyLimit: number; callConcurrency: number;
 };
 
 function Status({ on }: { on?: boolean }) {
@@ -46,7 +48,7 @@ export function LinkedinPanel({ f, set, connected, delay }: { f: IntegrationForm
   );
 }
 
-export function VoicePanel({ f, set, connected, delay }: { f: IntegrationForm; set: (k: keyof IntegrationForm, v: string | number) => void; connected?: boolean; delay?: number }) {
+export function VoicePanel({ f, set, connected, delay }: { f: IntegrationForm; set: (k: keyof IntegrationForm, v: string | number | boolean) => void; connected?: boolean; delay?: number }) {
   return (
     <Panel title="AI voice agent" delay={delay} action={<Status on={connected} />}>
       <div className="grid gap-3 p-4">
@@ -59,6 +61,14 @@ export function VoicePanel({ f, set, connected, delay }: { f: IntegrationForm; s
           <div><Label className="text-xs">API key{connected && " (blank keeps current)"}</Label><Input type="password" value={f.voiceApiKey} onChange={(e) => set("voiceApiKey", e.target.value)} data-testid="input-voice-key" /></div>
           <div><Label className="text-xs">Phone number id</Label><Input value={f.voicePhoneNumberId} onChange={(e) => set("voicePhoneNumberId", e.target.value)} data-testid="input-voice-number" /></div>
           <div className="col-span-2"><Label className="text-xs">Voice id (optional)</Label><Input value={f.voiceName} onChange={(e) => set("voiceName", e.target.value)} placeholder="Elliot" data-testid="input-voice-name" /></div>
+        </div>
+        <label className="flex items-center justify-between gap-3 border-t border-border pt-3 text-sm">
+          <span>Auto-dial queued calls<span className="block text-xs text-muted-foreground">Calls each person during the send window in their own time zone. Unanswered calls are retried once the next day.</span></span>
+          <Switch checked={f.autoDialEnabled} onCheckedChange={(v) => set("autoDialEnabled", v)} data-testid="switch-auto-dial" />
+        </label>
+        <div className="grid grid-cols-2 gap-2.5">
+          <div><Label className="text-xs">Calls per day</Label><Input type="number" min={1} max={1000} value={f.callDailyLimit} onChange={(e) => set("callDailyLimit", Number(e.target.value))} data-testid="input-call-daily-limit" /></div>
+          <div><Label className="text-xs">Calls at the same time</Label><Input type="number" min={1} max={10} value={f.callConcurrency} onChange={(e) => set("callConcurrency", Number(e.target.value))} data-testid="input-call-concurrency" /></div>
         </div>
         <div><TestButton provider="voice" /></div>
       </div>

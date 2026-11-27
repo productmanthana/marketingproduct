@@ -12,6 +12,7 @@ import {
   type SettingsRow,
 } from "@workspace/db";
 import { generateCallScript, summarizeCall, voiceAgentPrompt } from "./ai";
+import { queueRetryIfUnanswered } from "./auto-dialer";
 import { createTask, getOrCreateConversation, getSettings, leadName, logActivity, recordOutbound } from "./outreach";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -202,6 +203,7 @@ export async function handleVoiceEvent(body: any): Promise<void> {
   const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, call.leadId));
   if (unanswered) {
     await logActivity({ type: "call_completed", description: `AI call to ${lead ? leadName(lead) : "lead"}: no answer`, channel: "call", leadId: call.leadId });
+    await queueRetryIfUnanswered(updated!);
     return;
   }
   await summarizeAndFollowUp(updated!);

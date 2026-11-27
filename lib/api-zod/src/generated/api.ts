@@ -2434,6 +2434,10 @@ export const getSettingsResponseMeetingReminderHoursMax = 72;
 export const getSettingsResponseWarmupPerDayMin = 0;
 export const getSettingsResponseWarmupPerDayMax = 50;
 
+export const getSettingsResponseCallDailyLimitMax = 1000;
+
+export const getSettingsResponseCallConcurrencyMax = 10;
+
 
 
 export const GetSettingsResponse = zod.object({
@@ -2463,7 +2467,10 @@ export const GetSettingsResponse = zod.object({
   "sendInLeadTimezone": zod.boolean().optional().describe('Send inside the window of each person\'s own time zone'),
   "bouncePausePercent": zod.int().min(getSettingsResponseBouncePausePercentMin).max(getSettingsResponseBouncePausePercentMax).optional(),
   "meetingReminderHours": zod.int().min(getSettingsResponseMeetingReminderHoursMin).max(getSettingsResponseMeetingReminderHoursMax).optional(),
-  "warmupPerDay": zod.int().min(getSettingsResponseWarmupPerDayMin).max(getSettingsResponseWarmupPerDayMax).optional()
+  "warmupPerDay": zod.int().min(getSettingsResponseWarmupPerDayMin).max(getSettingsResponseWarmupPerDayMax).optional(),
+  "autoDialEnabled": zod.boolean().optional().describe('Dial queued calls automatically inside the send window'),
+  "callDailyLimit": zod.int().min(1).max(getSettingsResponseCallDailyLimitMax).optional(),
+  "callConcurrency": zod.int().min(1).max(getSettingsResponseCallConcurrencyMax).optional()
 })
 
 
@@ -2483,6 +2490,10 @@ export const updateSettingsBodyMeetingReminderHoursMax = 72;
 
 export const updateSettingsBodyWarmupPerDayMin = 0;
 export const updateSettingsBodyWarmupPerDayMax = 50;
+
+export const updateSettingsBodyCallDailyLimitMax = 1000;
+
+export const updateSettingsBodyCallConcurrencyMax = 10;
 
 
 
@@ -2513,7 +2524,10 @@ export const UpdateSettingsBody = zod.object({
   "sendInLeadTimezone": zod.boolean().optional().describe('Send inside the window of each person\'s own time zone'),
   "bouncePausePercent": zod.int().min(updateSettingsBodyBouncePausePercentMin).max(updateSettingsBodyBouncePausePercentMax).optional(),
   "meetingReminderHours": zod.int().min(updateSettingsBodyMeetingReminderHoursMin).max(updateSettingsBodyMeetingReminderHoursMax).optional(),
-  "warmupPerDay": zod.int().min(updateSettingsBodyWarmupPerDayMin).max(updateSettingsBodyWarmupPerDayMax).optional()
+  "warmupPerDay": zod.int().min(updateSettingsBodyWarmupPerDayMin).max(updateSettingsBodyWarmupPerDayMax).optional(),
+  "autoDialEnabled": zod.boolean().optional().describe('Dial queued calls automatically inside the send window'),
+  "callDailyLimit": zod.int().min(1).max(updateSettingsBodyCallDailyLimitMax).optional(),
+  "callConcurrency": zod.int().min(1).max(updateSettingsBodyCallConcurrencyMax).optional()
 })
 
 export const updateSettingsResponseBouncePausePercentMin = 0;
@@ -2524,6 +2538,10 @@ export const updateSettingsResponseMeetingReminderHoursMax = 72;
 
 export const updateSettingsResponseWarmupPerDayMin = 0;
 export const updateSettingsResponseWarmupPerDayMax = 50;
+
+export const updateSettingsResponseCallDailyLimitMax = 1000;
+
+export const updateSettingsResponseCallConcurrencyMax = 10;
 
 
 
@@ -2554,7 +2572,10 @@ export const UpdateSettingsResponse = zod.object({
   "sendInLeadTimezone": zod.boolean().optional().describe('Send inside the window of each person\'s own time zone'),
   "bouncePausePercent": zod.int().min(updateSettingsResponseBouncePausePercentMin).max(updateSettingsResponseBouncePausePercentMax).optional(),
   "meetingReminderHours": zod.int().min(updateSettingsResponseMeetingReminderHoursMin).max(updateSettingsResponseMeetingReminderHoursMax).optional(),
-  "warmupPerDay": zod.int().min(updateSettingsResponseWarmupPerDayMin).max(updateSettingsResponseWarmupPerDayMax).optional()
+  "warmupPerDay": zod.int().min(updateSettingsResponseWarmupPerDayMin).max(updateSettingsResponseWarmupPerDayMax).optional(),
+  "autoDialEnabled": zod.boolean().optional().describe('Dial queued calls automatically inside the send window'),
+  "callDailyLimit": zod.int().min(1).max(updateSettingsResponseCallDailyLimitMax).optional(),
+  "callConcurrency": zod.int().min(1).max(updateSettingsResponseCallConcurrencyMax).optional()
 })
 
 

@@ -28,6 +28,7 @@ const EMPTY: Form = {
   icpDescription: "", publicBaseUrl: "", trackOpens: true, unsubscribeFooter: true, sendWindowStart: 8, sendWindowEnd: 18, sendWeekdaysOnly: true, timezone: "UTC",
   unipileDsn: "", unipileApiKey: "", unipileAccountId: "", linkedinDailyLimit: 25, voiceApiBaseUrl: "https://api.vapi.ai", voiceApiKey: "", voicePhoneNumberId: "", voiceName: "", currency: "USD",
   sendInLeadTimezone: true, bouncePausePercent: 5, meetingReminderHours: 2, warmupPerDay: 10,
+  autoDialEnabled: false, callDailyLimit: 100, callConcurrency: 3,
 };
 
 export default function SettingsPage() {

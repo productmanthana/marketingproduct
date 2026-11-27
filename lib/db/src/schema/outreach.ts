@@ -148,6 +148,8 @@ export const callsTable = pgTable("calls", {
   transcript: text("transcript"),
   recordingUrl: text("recording_url"),
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+  /** 1 for the first try, 2 for the automatic retry after no answer. */
+  attempt: integer("attempt").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -205,6 +207,12 @@ export const settingsTable = pgTable("settings", {
   meetingReminderHours: integer("meeting_reminder_hours").notNull().default(2),
   /** Warm-up emails each mailbox sends per day to your other mailboxes. */
   warmupPerDay: integer("warmup_per_day").notNull().default(10),
+  /** Dial queued calls automatically with the AI voice agent inside the send window. */
+  autoDialEnabled: boolean("auto_dial_enabled").notNull().default(false),
+  /** Maximum AI calls started per day. */
+  callDailyLimit: integer("call_daily_limit").notNull().default(100),
+  /** AI calls allowed to run at the same time. */
+  callConcurrency: integer("call_concurrency").notNull().default(3),
 });
 
 export const mailboxesTable = pgTable("mailboxes", {
