@@ -18,6 +18,9 @@ export const campaignsTable = pgTable("campaigns", {
   autoReply: boolean("auto_reply").notNull().default(true),
   replyTone: text("reply_tone").notNull().default("friendly and concise"),
   meetingLink: text("meeting_link"),
+  sendGapMinutes: integer("send_gap_minutes").notNull().default(0),
+  /** Total spend on this campaign (data, tools, ads), in the CRM currency; used for cost per meeting. */
+  cost: integer("cost").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -29,8 +32,14 @@ export const sequenceStepsTable = pgTable("sequence_steps", {
   stepOrder: integer("step_order").notNull(),
   channel: text("channel").notNull(),
   delayDays: integer("delay_days").notNull().default(0),
+  delayHours: integer("delay_hours").notNull().default(0),
   subject: text("subject"),
   template: text("template").notNull(),
+  /** A/B test: version B of the subject and message. Null means no test. */
+  variantSubject: text("variant_subject"),
+  variantTemplate: text("variant_template"),
+  /** "a" or "b" once a winner is picked; afterwards everyone gets the winner. */
+  abWinner: text("ab_winner"),
 });
 
 export const leadsTable = pgTable("leads", {
@@ -47,8 +56,12 @@ export const leadsTable = pgTable("leads", {
   campaignId: integer("campaign_id").references(() => campaignsTable.id, {
     onDelete: "set null",
   }),
+  /** CRM account (company) this lead is a contact of. No FK to avoid a schema import cycle; cleared on account delete. */
+  accountId: integer("account_id"),
   currentStep: integer("current_step").notNull().default(0),
   nextStepAt: timestamp("next_step_at", { withTimezone: true }),
+  /** Hours this person waits for message 1 after Start; null follows the campaign's group pace. */
+  firstWaitHours: integer("first_wait_hours"),
   notes: text("notes"),
   lastContactedAt: timestamp("last_contacted_at", { withTimezone: true }),
   website: text("website"),
@@ -59,6 +72,16 @@ export const leadsTable = pgTable("leads", {
   companyLinkedinUrl: text("company_linkedin_url"),
   apolloId: text("apollo_id"),
   linkedinProviderId: text("linkedin_provider_id"),
+  /** Team member who owns this lead and its inbox threads. */
+  ownerId: integer("owner_id"),
+  /** valid | risky | invalid | bounced | null (not checked yet) */
+  emailStatus: text("email_status"),
+  emailCheckedAt: timestamp("email_checked_at", { withTimezone: true }),
+  /** IANA time zone of the person, used to send inside their own working hours. */
+  timezone: text("timezone"),
+  /** Buying signals found by the AI (hiring, funding, launches...), one per line. */
+  signals: text("signals"),
+  signalsAt: timestamp("signals_at", { withTimezone: true }),
   unsubscribeToken: text("unsubscribe_token").notNull().default(sql`gen_random_uuid()::text`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -96,6 +119,11 @@ export const outreachMessagesTable = pgTable("outreach_messages", {
   externalId: text("external_id"),
   trackingToken: text("tracking_token").notNull().default(sql`gen_random_uuid()::text`),
   openedAt: timestamp("opened_at", { withTimezone: true }),
+  clickedAt: timestamp("clicked_at", { withTimezone: true }),
+  clickCount: integer("click_count").notNull().default(0),
+  /** Sequence step and A/B version that produced this message (null for replies and manual sends). */
+  stepOrder: integer("step_order"),
+  variant: text("variant"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -129,6 +157,8 @@ export const activitiesTable = pgTable("activities", {
   description: text("description").notNull(),
   channel: text("channel"),
   leadId: integer("lead_id").references(() => leadsTable.id, { onDelete: "set null" }),
+  accountId: integer("account_id"),
+  dealId: integer("deal_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -156,6 +186,25 @@ export const settingsTable = pgTable("settings", {
   voiceApiKey: text("voice_api_key").notNull().default(""),
   voicePhoneNumberId: text("voice_phone_number_id").notNull().default(""),
   voiceName: text("voice_name").notNull().default(""),
+  currency: text("currency").notNull().default("USD"),
+  // Google Calendar auto-scheduling
+  googleRefreshToken: text("google_refresh_token").notNull().default(""),
+  googleEmail: text("google_email").notNull().default(""),
+  meetingStartHour: integer("meeting_start_hour").notNull().default(10),
+  meetingEndHour: integer("meeting_end_hour").notNull().default(18),
+  meetingMinutes: integer("meeting_minutes").notNull().default(20),
+  // Cal.com scheduling (used instead of Google when an API key is set)
+  calcomApiKey: text("calcom_api_key").notNull().default(""),
+  calcomEventTypeId: integer("calcom_event_type_id"),
+  calcomEventLength: integer("calcom_event_length"),
+  /** Send each person's sequence steps inside the send window of their own time zone. */
+  sendInLeadTimezone: boolean("send_in_lead_timezone").notNull().default(true),
+  /** Pause a campaign automatically when this share of its emails bounce (percent, 0 = never). */
+  bouncePausePercent: integer("bounce_pause_percent").notNull().default(5),
+  /** Hours before a meeting to email the prospect a reminder (0 = off). */
+  meetingReminderHours: integer("meeting_reminder_hours").notNull().default(2),
+  /** Warm-up emails each mailbox sends per day to your other mailboxes. */
+  warmupPerDay: integer("warmup_per_day").notNull().default(10),
 });
 
 export const mailboxesTable = pgTable("mailboxes", {
@@ -179,6 +228,11 @@ export const mailboxesTable = pgTable("mailboxes", {
   warmupIncrement: integer("warmup_increment").notNull().default(3),
   sentToday: integer("sent_today").notNull().default(0),
   sentDate: text("sent_date"),
+  warmupSentToday: integer("warmup_sent_today").notNull().default(0),
+  warmupDate: text("warmup_date"),
+  /** Warm-up emails received by this mailbox: total, and how many had landed in spam (and were rescued). */
+  warmupReceived: integer("warmup_received").notNull().default(0),
+  warmupSpam: integer("warmup_spam").notNull().default(0),
   active: boolean("active").notNull().default(true),
   lastUid: integer("last_uid"),
   lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
@@ -193,6 +247,7 @@ export const tasksTable = pgTable("tasks", {
   dueAt: timestamp("due_at", { withTimezone: true }),
   done: boolean("done").notNull().default(false),
   source: text("source").notNull().default("manual"),
+  dealId: integer("deal_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

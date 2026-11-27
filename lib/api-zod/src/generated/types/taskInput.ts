@@ -10,5 +10,6 @@ export interface TaskInput {
   /** @minLength 1 */
   title: string;
   leadId?: number;
+  dealId?: number;
   dueAt?: Date;
 }

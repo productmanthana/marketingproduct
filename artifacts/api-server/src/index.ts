@@ -2,6 +2,8 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/outreach";
 import { startInboxSync } from "./lib/inbox-sync";
+import { startMeetingAutomation } from "./lib/meetings";
+import { startWarmup } from "./lib/warmup";
 
 const rawPort = process.env["PORT"];
 
@@ -26,4 +28,6 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
   startScheduler();
   startInboxSync();
+  startMeetingAutomation();
+  startWarmup();
 });

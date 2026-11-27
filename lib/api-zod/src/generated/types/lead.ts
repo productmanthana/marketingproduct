@@ -5,10 +5,16 @@
  * Outreach Autopilot API
  * OpenAPI spec version: 0.1.0
  */
+import type { LeadEmailStatus } from './leadEmailStatus';
 import type { LeadStatus } from './leadStatus';
 
 export interface Lead {
   id: number;
+  /**
+     * Hours this person waits for message 1 after Start; null follows the campaign pace
+     * @nullable
+     */
+  firstWaitHours?: number | null;
   firstName: string;
   lastName: string;
   /** @nullable */
@@ -28,6 +34,10 @@ export interface Lead {
   campaignId?: number | null;
   /** @nullable */
   campaignName?: string | null;
+  /** @nullable */
+  accountId?: number | null;
+  /** @nullable */
+  accountName?: string | null;
   currentStep?: number;
   /** @nullable */
   notes?: string | null;
@@ -49,6 +59,27 @@ export interface Lead {
   companyLocation?: string | null;
   /** @nullable */
   companyLinkedinUrl?: string | null;
+  /** @nullable */
+  ownerId?: number | null;
+  /** @nullable */
+  ownerName?: string | null;
+  /**
+     * Result of the email check; null = not checked
+     * @nullable
+     */
+  emailStatus?: LeadEmailStatus;
+  /**
+     * IANA time zone of the person
+     * @nullable
+     */
+  timezone?: string | null;
+  /**
+     * Buying signals, one per line
+     * @nullable
+     */
+  signals?: string | null;
+  /** @nullable */
+  signalsAt?: Date | null;
   /** @nullable */
   lastContactedAt?: Date | null;
   createdAt: Date;

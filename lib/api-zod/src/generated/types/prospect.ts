@@ -19,5 +19,22 @@ export interface Prospect {
   /** @nullable */
   linkedinUrl?: string | null;
   hasEmail: boolean;
+  /**
+     * Known email (already revealed or added)
+     * @nullable
+     */
+  email?: string | null;
   alreadyImported: boolean;
+  /**
+     * The lead this person was added as before
+     * @nullable
+     */
+  leadId?: number | null;
+  /**
+     * Campaign that lead is in now
+     * @nullable
+     */
+  campaignId?: number | null;
+  /** @nullable */
+  campaignName?: string | null;
 }

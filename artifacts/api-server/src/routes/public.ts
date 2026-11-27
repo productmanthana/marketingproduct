@@ -5,6 +5,7 @@ import { handleVoiceEvent } from "../lib/calls";
 import { getOrCreateConversation, getSettings, leadName, logActivity, processInbound } from "../lib/outreach";
 import { linkedinIdentifier } from "../lib/delivery";
 import { logger } from "../lib/logger";
+import { suppressLead } from "../lib/suppression";
 
 /** Endpoints reached by recipients and providers: open pixel, unsubscribe page, voice and LinkedIn webhooks. */
 const router: IRouter = Router();
@@ -28,6 +29,26 @@ router.get("/t/:token.gif", async (req, res): Promise<void> => {
   res.set({ "content-type": "image/gif", "cache-control": "no-store, max-age=0" }).send(PIXEL);
 });
 
+// Link clicks: count them, then send the reader on. Only links that are in the email itself are followed.
+router.get("/c/:token", async (req, res): Promise<void> => {
+  const url = typeof req.query.u === "string" ? req.query.u : "";
+  const [msg] = await db.select().from(outreachMessagesTable).where(eq(outreachMessagesTable.trackingToken, req.params.token)).limit(1);
+  if (!msg || !/^https?:\/\//i.test(url) || !msg.body.includes(url)) {
+    res.status(404).send("Link not found");
+    return;
+  }
+  await db
+    .update(outreachMessagesTable)
+    .set({ clickCount: msg.clickCount + 1, clickedAt: msg.clickedAt ?? new Date(), openedAt: msg.openedAt ?? new Date() })
+    .where(eq(outreachMessagesTable.id, msg.id));
+  if (!msg.clickedAt) {
+    const [conv] = await db.select().from(outreachConversationsTable).where(eq(outreachConversationsTable.id, msg.conversationId));
+    const [lead] = conv ? await db.select().from(leadsTable).where(eq(leadsTable.id, conv.leadId)) : [];
+    if (lead) await logActivity({ type: "link_clicked", description: `${leadName(lead)} clicked ${url.slice(0, 80)}`, channel: "email", leadId: lead.id });
+  }
+  res.redirect(302, url);
+});
+
 const page = (title: string, body: string) =>
   `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head><body style="font-family:system-ui,sans-serif;background:#f6f5f2;display:grid;place-items:center;min-height:100vh;margin:0"><div style="background:#fff;padding:32px 40px;border-radius:12px;max-width:420px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.08)"><h1 style="font-size:20px;margin:0 0 8px">${title}</h1><p style="color:#555;margin:0">${body}</p></div></body></html>`;
 
@@ -41,6 +62,7 @@ router.get("/unsubscribe/:token", async (req, res): Promise<void> => {
     await db.update(leadsTable).set({ status: "unsubscribed", nextStepAt: null }).where(eq(leadsTable.id, lead.id));
     await logActivity({ type: "unsubscribed", description: `${leadName(lead)} unsubscribed via email link`, channel: "email", leadId: lead.id });
   }
+  await suppressLead(lead, "unsubscribe link");
   const settings = await getSettings();
   res.send(page("You're unsubscribed", `You won't receive further messages from ${settings.companyName}.`));
 });
@@ -52,6 +74,7 @@ router.post("/unsubscribe/:token", async (req, res): Promise<void> => {
     await db.update(leadsTable).set({ status: "unsubscribed", nextStepAt: null }).where(eq(leadsTable.id, lead.id));
     await logActivity({ type: "unsubscribed", description: `${leadName(lead)} unsubscribed`, channel: "email", leadId: lead.id });
   }
+  if (lead) await suppressLead(lead, "unsubscribe link");
   res.sendStatus(200);
 });
 

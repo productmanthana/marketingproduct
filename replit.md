@@ -20,7 +20,7 @@ Multichannel sales outreach automation: campaigns sequence cold emails, LinkedIn
 ## Where things live
 
 - API contract: `lib/api-spec/openapi.yaml`
-- DB schema: `lib/db/src/schema/outreach.ts`
+- DB schema: `lib/db/src/schema/outreach.ts` (outreach) and `lib/db/src/schema/crm.ts` (accounts, deals, notes)
 - AI prompts: `artifacts/api-server/src/lib/ai.ts`
 - Automation engine (sequence runner, auto-reply loop, scheduler): `artifacts/api-server/src/lib/outreach.ts`
 - Frontend pages: `artifacts/outreach/src/pages/`
@@ -31,14 +31,15 @@ Multichannel sales outreach automation: campaigns sequence cold emails, LinkedIn
 - Any inbound reply stops the automated sequence for that lead (`nextStepAt = null`).
 - An in-process scheduler runs due sequence steps for all `active` campaigns every 60 seconds.
 - Real delivery: email via user-added SMTP mailboxes (IMAP reply sync, daily limits/warm-up, open tracking, unsubscribe), LinkedIn via Unipile, AI voice calls via Vapi — all configured in Settings. With nothing configured, outbound messages are kept in-app only. Inbound replies also arrive via `POST /api/webhooks/inbound` or "simulate reply".
-- Apollo (user's own key, secret `Apollo_api_key`, billed by Apollo): Find leads page (people search + reveal/import) needs a paid Apollo plan; company details (industry, size, location, LinkedIn) via organization enrich work on the free plan and run automatically for new leads with a website or work email.
+- Apollo (user's own key, secret `Apollo_api_key` / `APOLLO_API_KEY` / `apollo_api_key`, billed by Apollo): Find leads page (people search + reveal/import) needs a paid Apollo plan; company details (industry, size, location, LinkedIn) via organization enrich work on the free plan and run automatically for new leads with a website or work email.
+- CRM: accounts (companies), deals (opportunities with stages prospecting → qualification → proposal → negotiation → closed won/lost, default probabilities 10/25/50/75/100/0), notes. Leads act as contacts via `leads.account_id`; `leads.account_id`, `activities.account_id/deal_id` and `tasks.deal_id` are plain integers (no FK, to avoid a schema import cycle) and are cleared in code on delete. Converting a lead links or creates the account from its company name; a lead reaching `meeting_booked` (AI-classified reply or manual) opens a deal automatically if it has no open one. Winning a deal flips a `prospect` account to `customer`. Deal amounts use the workspace currency (`settings.currency`). Logic in `artifacts/api-server/src/lib/crm.ts`, routes `accounts.ts`, `deals.ts` (deals, notes, lead convert, AI insight), `crm.ts` (report, global search).
 - Mailbox SMTP/IMAP passwords are stored unencrypted in the DB (known; revisit before production).
 - The GitHub repo (productmanthana/marketingproduct) is the code exchange point; the workspace itself is not a git repo, so PRs are applied by copying changed files in.
 - Message tables are named `outreach_conversations` / `outreach_messages` to avoid clashing with the AI integration's template tables.
 
 ## Product
 
-Dashboard, campaigns with AI-generated multichannel sequences, leads (CSV import), unified inbox with AI auto-reply and AI drafts, call queue with AI scripts and summaries (summary auto-sends a recap email), settings.
+Dashboard, campaigns with AI-generated multichannel sequences, CRM (pipeline board/list with drag-and-drop, deal pages with stage path and AI review, accounts, reports, Ctrl+K global search), leads (CSV import), unified inbox with AI auto-reply and AI drafts, call queue with AI scripts and summaries (summary auto-sends a recap email), settings.
 
 ## Pointers
 

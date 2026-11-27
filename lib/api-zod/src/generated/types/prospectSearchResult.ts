@@ -6,8 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Prospect } from './prospect';
+import type { ProspectSearchResultSource } from './prospectSearchResultSource';
 
 export interface ProspectSearchResult {
+  /** Source that returned these results */
+  source?: ProspectSearchResultSource;
   people: Prospect[];
   total: number;
   page: number;

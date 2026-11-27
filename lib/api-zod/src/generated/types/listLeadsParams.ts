@@ -11,4 +11,6 @@ export type ListLeadsParams = {
 search?: string;
 status?: LeadStatus;
 campaignId?: number;
+ownerId?: number;
+hasSignals?: boolean;
 };

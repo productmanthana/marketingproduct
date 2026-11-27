@@ -1,6 +1,15 @@
 import { Router, type IRouter } from "express";
 import { and, asc, desc, eq, inArray, max } from "drizzle-orm";
-import { db, campaignsTable, leadsTable, sequenceStepsTable } from "@workspace/db";
+import {
+  db,
+  callsTable,
+  campaignsTable,
+  leadsTable,
+  outreachConversationsTable,
+  outreachMessagesTable,
+  sequenceStepsTable,
+  type LeadRow,
+} from "@workspace/db";
 import {
   AddSequenceStepBody,
   AddSequenceStepParams,
@@ -12,6 +21,8 @@ import {
   GenerateCampaignSequenceParams,
   GetCampaignParams,
   GetCampaignResponse,
+  ListCampaignSentParams,
+  ListCampaignSentResponse,
   PreviewSequenceStepBody,
   PreviewSequenceStepParams,
   PreviewSequenceStepResponse,
@@ -22,11 +33,17 @@ import {
   UpdateCampaignParams,
   UpdateSequenceStepBody,
   UpdateSequenceStepParams,
+  WriteCampaignPitchBody,
+  WriteCampaignPitchParams,
 } from "@workspace/api-zod";
-import { generateSequence, personalizeMessage } from "../lib/ai";
+import { generateSequence, personalizeMessage, writePitch } from "../lib/ai";
 import { getSettings, runCampaign, serializeCampaigns, serializeLeads } from "../lib/outreach";
+import { variantStats } from "../lib/ab-test";
 
 const router: IRouter = Router();
+
+/** Stand-in prospect for previews before any leads exist. Only the profile fields the AI reads are set. */
+const SAMPLE_LEAD = { firstName: "Priya", lastName: "Sharma", company: "Sample Co", title: "Operations Manager", industry: null, notes: null } as unknown as LeadRow;
 
 async function campaignDetail(id: number) {
   const [c] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, id));
@@ -42,7 +59,12 @@ async function campaignDetail(id: number) {
     .from(leadsTable)
     .where(eq(leadsTable.campaignId, id))
     .orderBy(desc(leadsTable.createdAt));
-  return GetCampaignResponse.parse({ ...base, steps, leads: await serializeLeads(leads) });
+  const stats = await variantStats(id, steps.filter((s) => s.variantTemplate).map((s) => s.stepOrder));
+  return GetCampaignResponse.parse({
+    ...base,
+    steps: steps.map((s) => ({ ...s, abStats: stats.get(s.stepOrder) ?? [] })),
+    leads: await serializeLeads(leads),
+  });
 }
 
 async function campaignSummary(id: number) {
@@ -130,6 +152,7 @@ router.post("/campaigns/:id/steps", async (req, res): Promise<void> => {
       stepOrder: (maxOrder ?? 0) + 1,
       channel: parsed.data.channel,
       delayDays: parsed.data.delayDays ?? 0,
+      delayHours: parsed.data.delayHours ?? 0,
       subject: parsed.data.subject ?? null,
       template: parsed.data.template,
     })
@@ -144,9 +167,12 @@ router.patch("/campaigns/:id/steps/:stepId", async (req, res): Promise<void> => 
     res.status(400).json({ error: (params.error ?? parsed.error)?.message });
     return;
   }
+  const changes = { ...parsed.data };
+  // Removing version B ends the A/B test.
+  if ("variantTemplate" in changes && !changes.variantTemplate?.trim()) Object.assign(changes, { variantTemplate: null, variantSubject: null, abWinner: null });
   const [step] = await db
     .update(sequenceStepsTable)
-    .set(parsed.data)
+    .set(changes)
     .where(
       and(
         eq(sequenceStepsTable.id, params.data.stepId),
@@ -190,7 +216,9 @@ router.post("/campaigns/:id/steps/:stepId/preview", async (req, res): Promise<vo
     .select()
     .from(sequenceStepsTable)
     .where(and(eq(sequenceStepsTable.id, params.data.stepId), eq(sequenceStepsTable.campaignId, params.data.id)));
-  const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, parsed.data.leadId));
+  const [lead] = parsed.data.leadId
+    ? await db.select().from(leadsTable).where(eq(leadsTable.id, parsed.data.leadId))
+    : [SAMPLE_LEAD];
   if (!campaign || !step || !lead) {
     res.status(404).json({ error: "Campaign, step or lead not found" });
     return;
@@ -251,6 +279,61 @@ router.post("/campaigns/:id/generate-sequence", async (req, res): Promise<void> 
       .values(steps.map((s, i) => ({ ...s, campaignId: c.id, stepOrder: i + 1 })));
   }
   res.json(await campaignDetail(c.id));
+});
+
+router.post("/campaigns/:id/write-pitch", async (req, res): Promise<void> => {
+  const params = WriteCampaignPitchParams.safeParse(req.params);
+  const body = WriteCampaignPitchBody.safeParse(req.body ?? {});
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: (params.error ?? body.error)?.message });
+    return;
+  }
+  const [c] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, params.data.id));
+  if (!c) {
+    res.status(404).json({ error: "Campaign not found" });
+    return;
+  }
+  const pitch = await writePitch({ campaign: c, settings: await getSettings(), notes: body.data.notes?.trim() ?? "", goal: body.data.goal?.trim() || c.goal });
+  res.json({ pitch });
+});
+
+/** Outbound messages and calls of one campaign, newest first. */
+router.get("/campaigns/:id/sent", async (req, res): Promise<void> => {
+  const params = ListCampaignSentParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const id = params.data.id;
+  const [messages, calls] = await Promise.all([
+    db
+      .select({ m: outreachMessagesTable, leadId: leadsTable.id, first: leadsTable.firstName, last: leadsTable.lastName })
+      .from(outreachMessagesTable)
+      .innerJoin(outreachConversationsTable, eq(outreachConversationsTable.id, outreachMessagesTable.conversationId))
+      .innerJoin(leadsTable, eq(leadsTable.id, outreachConversationsTable.leadId))
+      .where(and(eq(outreachConversationsTable.campaignId, id), eq(outreachMessagesTable.direction, "outbound")))
+      .orderBy(desc(outreachMessagesTable.createdAt))
+      .limit(200),
+    db
+      .select({ c: callsTable, first: leadsTable.firstName, last: leadsTable.lastName })
+      .from(callsTable)
+      .innerJoin(leadsTable, eq(leadsTable.id, callsTable.leadId))
+      .where(eq(callsTable.campaignId, id))
+      .orderBy(desc(callsTable.createdAt))
+      .limit(200),
+  ]);
+  const name = (f: string, l: string) => `${f} ${l}`.trim();
+  const items = [
+    ...messages.map(({ m, leadId, first, last }) => ({
+      key: `m${m.id}`, kind: "message" as const, channel: m.channel, leadId, leadName: name(first, last),
+      subject: m.subject, body: m.body, status: m.deliveryStatus, error: m.deliveryError, openedAt: m.openedAt, createdAt: m.createdAt,
+    })),
+    ...calls.map(({ c, first, last }) => ({
+      key: `c${c.id}`, kind: "call" as const, channel: "call", leadId: c.leadId, leadName: name(first, last),
+      subject: c.outcome, body: c.summary ?? c.objective, status: c.status, error: null, openedAt: null, createdAt: c.createdAt,
+    })),
+  ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  res.json(ListCampaignSentResponse.parse(items));
 });
 
 router.post("/campaigns/:id/run", async (req, res): Promise<void> => {

@@ -10,6 +10,8 @@ import type { Channel } from './channel';
 export interface SequenceStepInput {
   channel: Channel;
   delayDays?: number;
+  /** Extra hours to wait on top of delayDays */
+  delayHours?: number;
   subject?: string;
   template: string;
 }

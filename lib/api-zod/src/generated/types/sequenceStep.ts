@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Channel } from './channel';
+import type { SequenceStepAbWinner } from './sequenceStepAbWinner';
+import type { VariantStat } from './variantStat';
 
 export interface SequenceStep {
   id: number;
@@ -13,8 +15,23 @@ export interface SequenceStep {
   stepOrder: number;
   channel: Channel;
   delayDays: number;
+  /** Extra hours to wait on top of delayDays */
+  delayHours: number;
   /** @nullable */
   subject?: string | null;
   /** Message template or call objective. Supports {{firstName}}, {{company}}, {{title}} */
   template: string;
+  /**
+     * A/B test version B subject
+     * @nullable
+     */
+  variantSubject?: string | null;
+  /**
+     * A/B test version B message; null = no test
+     * @nullable
+     */
+  variantTemplate?: string | null;
+  /** @nullable */
+  abWinner?: SequenceStepAbWinner;
+  abStats?: VariantStat[];
 }

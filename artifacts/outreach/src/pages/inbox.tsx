@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearch } from "wouter";
-import { Bot, Inbox as InboxIcon, Send, Sparkles, FlaskConical, User, RefreshCw, Eye, AlertTriangle } from "lucide-react";
+import { Bot, Inbox as InboxIcon, Send, Sparkles, FlaskConical, User, RefreshCw, Eye, AlertTriangle, MousePointerClick } from "lucide-react";
 import {
-  useListConversations, useGetConversation, getGetConversationQueryKey, useUpdateConversation, useSendMessage, useReceiveInbound, useDraftAiReply, useSyncMailboxes,
+  useListConversations, getListConversationsQueryKey, useGetConversation, getGetConversationQueryKey, useUpdateConversation, useSendMessage, useReceiveInbound, useDraftAiReply, useSyncMailboxes,
 } from "@workspace/api-client-react";
 import type { AiDraft, Channel, ConversationStatus, Message } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -10,16 +10,26 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { MeetingLinkPrompt } from "@/components/meeting-link-prompt";
+import { BookMeetingPrompt } from "@/components/book-meeting-prompt";
+import { useViewingAs } from "@/components/viewing-as";
 import { Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, ago, label, chColor, errMsg, useRefreshAll, type Ch } from "@/components/bits";
 
-const STATUSES = ["open", "auto_replied", "needs_review", "closed"];
+const STATUSES = ["open", "auto_replied", "needs_review", "snoozed", "closed"];
+/** Reply sorting: the AI labels each reply; these filter the list by label. */
+const SORTS: [string, string][] = [["", "Any reply"], ["interested", "Interested"], ["not_now", "Not now"], ["out_of_office", "Out of office"], ["referral", "Referral"], ["objection", "Objection"], ["unsubscribe", "Unsubscribe"]];
+const SORT_MATCH: Record<string, string[]> = { interested: ["positive"], not_now: ["not_now"], out_of_office: ["out_of_office"], referral: ["referral"], objection: ["objection", "negative"], unsubscribe: ["unsubscribe"] };
 
 export default function Inbox() {
   const initial = Number(new URLSearchParams(useSearch()).get("c")) || null;
   const [channel, setChannel] = useState("");
   const [status, setStatus] = useState("");
+  const [sort, setSort] = useState("");
   const [sel, setSel] = useState<number | null>(initial);
-  const q = useListConversations({ channel: (channel || undefined) as Channel | undefined, status: (status || undefined) as ConversationStatus | undefined });
+  const ownerId = useViewingAs();
+  const params = { channel: (channel || undefined) as Channel | undefined, status: (status || undefined) as ConversationStatus | undefined, ownerId };
+  const q = useListConversations(params, { query: { queryKey: getListConversationsQueryKey(params), refetchInterval: 10_000 } });
+  const list = sort ? q.data?.filter((c) => c.sentiment && SORT_MATCH[sort]!.includes(c.sentiment)) : q.data;
   const sync = useSyncMailboxes();
   const refresh = useRefreshAll();
   const { toast } = useToast();
@@ -30,15 +40,18 @@ export default function Inbox() {
         <h1 className="font-display mr-4 text-2xl font-bold">Inbox</h1>
         <Seg value={channel} onChange={setChannel} opts={[["", "All"], ["email", "Email"], ["linkedin", "LinkedIn"]]} id="channel" />
         <Seg value={status} onChange={setStatus} opts={[["", "Any"], ...STATUSES.map((s) => [s, label(s)] as [string, string])]} id="status" />
+        <select className="h-8 rounded-lg border border-border bg-card px-2 text-xs" value={sort} onChange={(e) => setSort(e.target.value)} data-testid="select-reply-sort" aria-label="Reply type">
+          {SORTS.map(([v, l]) => <option key={v} value={v}>{l}{v && q.data ? ` (${q.data.filter((c) => c.sentiment && SORT_MATCH[v]!.includes(c.sentiment)).length})` : ""}</option>)}
+        </select>
         <Button size="sm" variant="outline" className="ml-auto" disabled={sync.isPending} data-testid="button-check-replies"
           onClick={() => sync.mutate(undefined, { onSuccess: (r) => { refresh(); toast({ title: r.mailboxes ? `${r.newReplies} new replies` : "No mailbox with reply sync", description: r.errors.length ? r.errors.join("; ") : r.mailboxes ? undefined : "Add IMAP details to a mailbox in Settings.", variant: r.errors.length ? "destructive" : undefined }); } })}>
           <RefreshCw className={cn("mr-1 h-3.5 w-3.5", sync.isPending && "animate-spin")} />Check replies</Button>
       </div>
       <div className="flex min-h-0 flex-1">
         <div className={cn("w-full shrink-0 overflow-y-auto border-r border-border md:w-[340px]", sel && "hidden md:block")}>
-          {q.isLoading ? <Rows n={7} h={58} /> : q.isError ? <ErrorBox onRetry={() => q.refetch()} /> : !q.data?.length ? (
+          {q.isLoading ? <Rows n={7} h={58} /> : q.isError ? <ErrorBox onRetry={() => q.refetch()} /> : !list?.length ? (
             <div className="p-4"><Empty icon={InboxIcon} title="Inbox zero" body="Replies across email and LinkedIn land here. The AI answers what it can." /></div>
-          ) : q.data.map((c, i) => (
+          ) : list.map((c, i) => (
             <button key={c.id} onClick={() => setSel(c.id)} data-testid={`button-conversation-${c.id}`}
               className={cn("rise relative block w-full border-b border-border px-4 py-3 text-left transition-colors hover:bg-muted/50", sel === c.id && "bg-card")} style={{ animationDelay: `${i * 25}ms` }}>
               <span className="absolute bottom-0 left-0 top-0 w-[3px]" style={{ background: sel === c.id ? chColor(c.channel as Ch) : "transparent" }} />
@@ -93,17 +106,20 @@ function Bubble({ m, i }: { m: Message; i: number }) {
 
 function Delivery({ m }: { m: Message }) {
   const base = "mt-2 flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider opacity-70";
-  if (m.deliveryStatus === "failed") return <div className={cn(base, "text-destructive opacity-100")} title={m.deliveryError ?? ""} data-testid={`delivery-failed-${m.id}`}><AlertTriangle className="h-3 w-3" />Not delivered: {m.deliveryError}</div>;
+  if (m.deliveryStatus === "failed" || m.deliveryStatus === "blocked") return <div className={cn(base, "text-destructive opacity-100")} title={m.deliveryError ?? ""} data-testid={`delivery-${m.deliveryStatus}-${m.id}`}><AlertTriangle className="h-3 w-3" />{m.deliveryStatus === "blocked" ? "Not sent" : "Not delivered"}: {m.deliveryError}</div>;
+  if (m.deliveryStatus === "bounced") return <div className={cn(base, "text-destructive opacity-100")} data-testid={`delivery-bounced-${m.id}`}><AlertTriangle className="h-3 w-3" />Bounced: the address does not accept mail</div>;
   return (
     <div className={base} data-testid={`delivery-${m.deliveryStatus}-${m.id}`}>
       {m.deliveryStatus === "sent" ? `Delivered via ${m.channel === "email" ? "mailbox" : "LinkedIn"}` : "Saved in-app (no provider connected)"}
       {m.openedAt && <span className="ml-1 inline-flex items-center gap-1"><Eye className="h-3 w-3" />opened {ago(m.openedAt)}</span>}
+      {!!m.clickCount && <span className="ml-1 inline-flex items-center gap-1" data-testid={`clicks-${m.id}`}><MousePointerClick className="h-3 w-3" />{m.clickCount} click{m.clickCount === 1 ? "" : "s"}</span>}
+      {m.variant && <span className="ml-1">· version {m.variant.toUpperCase()}</span>}
     </div>
   );
 }
 
 function Thread({ id, onBack }: { id: number; onBack: () => void }) {
-  const q = useGetConversation(id, { query: { enabled: !!id, queryKey: getGetConversationQueryKey(id) } });
+  const q = useGetConversation(id, { query: { enabled: !!id, queryKey: getGetConversationQueryKey(id), refetchInterval: 10_000 } });
   const upd = useUpdateConversation();
   const send = useSendMessage();
   const inbound = useReceiveInbound();
@@ -121,6 +137,8 @@ function Thread({ id, onBack }: { id: number; onBack: () => void }) {
   useEffect(() => { setBody(""); setSubject(""); setAi(null); setSim(""); }, [id]);
   useEffect(() => { if (c?.unread) updRef.current({ id, data: { unread: false } }, { onSuccess: () => refresh() }); }, [c?.unread, id]); // eslint-disable-line
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [c?.messages.length, inbound.isPending]);
+
+  const runDraft = () => draft.mutate({ id }, { onSuccess: (d) => { setAi(d); setBody(d.body); if (d.subject) setSubject(d.subject); }, onError: () => toast({ title: "Draft failed", variant: "destructive" }) });
 
   if (q.isLoading) return <Rows n={5} h={80} />;
   if (q.isError || !c) return <ErrorBox onRetry={() => q.refetch()} />;
@@ -149,19 +167,29 @@ function Thread({ id, onBack }: { id: number; onBack: () => void }) {
       </div>
 
       <div className="space-y-3 border-t border-border bg-card p-4">
+        {c.status === "needs_review" && !ai && (
+          <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800" data-testid="banner-needs-review">
+            The AI held this reply for you instead of sending it (it needs something only you can give, like a meeting link or times). Press <b>Draft with AI</b>, fill in the details, then Send.
+          </p>
+        )}
+        {c.status === "needs_review" && c.campaignId && <MeetingLinkPrompt campaignId={c.campaignId} onSaved={runDraft} />}
+        {c.status === "needs_review" && (
+          <BookMeetingPrompt key={id} conversationId={id} onBooked={(r) => { setAi(null); setBody(r.body); if (r.subject) setSubject(r.subject); refresh(); }} />
+        )}
         {draft.isPending && <AiWorking text="Drafting a reply in your tone" />}
         {ai && (
           <div className="pop rounded-lg border border-primary/30 bg-accent/50 p-3 text-xs" data-testid="panel-ai-draft">
             <div className="flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-primary" /><b className="text-accent-foreground">AI draft loaded below</b><span className="text-muted-foreground">Detected</span><Pill value={ai.sentiment} />
               <button className="ml-auto text-muted-foreground hover:text-foreground" onClick={() => setAi(null)} data-testid="button-dismiss-draft">Dismiss</button></div>
             <p className="mt-1.5 whitespace-pre-wrap text-muted-foreground">{ai.reasoning}</p>
+            {ai.needsHuman && <p className="mt-1.5 font-medium text-amber-700" data-testid="text-needs-human">Before sending: {ai.needsHuman}</p>}
           </div>
         )}
         {isEmail && <Input placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} data-testid="input-reply-subject" />}
         <Textarea rows={4} placeholder={`Reply on ${c.channel}...`} value={body} onChange={(e) => setBody(e.target.value)} data-testid="input-reply-body" />
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" disabled={draft.isPending} data-testid="button-draft-ai"
-            onClick={() => draft.mutate({ id }, { onSuccess: (d) => { setAi(d); setBody(d.body); if (d.subject) setSubject(d.subject); }, onError: () => toast({ title: "Draft failed", variant: "destructive" }) })}>
+            onClick={runDraft}>
             <Sparkles className="mr-1.5 h-4 w-4 text-primary" />{draft.isPending ? "Drafting..." : "Draft with AI"}
           </Button>
           <Button className="ml-auto" disabled={!body.trim() || send.isPending} data-testid="button-send-reply"

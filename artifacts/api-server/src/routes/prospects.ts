@@ -1,17 +1,33 @@
+import { guessTimezone } from "../lib/timezones";
 import { Router, type IRouter } from "express";
-import { inArray } from "drizzle-orm";
-import { db, leadsTable } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
+import { campaignsTable, db, leadsTable } from "@workspace/db";
 import {
   GetProspectStatusResponse,
   ImportProspectsBody,
   ImportProspectsResponse,
+  RevealProspectsBody,
+  RevealProspectsResponse,
   SearchProspectsBody,
   SearchProspectsResponse,
 } from "@workspace/api-zod";
-import { ApolloError, apolloKey, orgFields, placeOf, revealPeople, searchPeople } from "../lib/apollo";
+import { ApolloError, apolloKey, leadDataConfigured, orgFields, placeOf, revealPeople, searchPeople } from "../lib/apollo";
+import { firecrawlKey } from "../lib/firecrawl";
 import { logActivity } from "../lib/outreach";
 
 const router: IRouter = Router();
+
+type Person = Awaited<ReturnType<typeof revealPeople>>[number];
+/** People already revealed this session, so adding them later doesn't spend credits again. */
+const revealed = new Map<string, Person>();
+const emailOf = (p: Person) => (p.email && p.email_status !== "unavailable" ? p.email : null);
+
+/** Reveal only the ids not revealed yet; returns every requested person found. */
+async function reveal(ids: string[], source: Parameters<typeof revealPeople>[1]): Promise<Person[]> {
+  const missing = ids.filter((id) => !revealed.has(id));
+  if (missing.length) for (const p of await revealPeople(missing, source)) revealed.set(p.id, p);
+  return ids.map((id) => revealed.get(id)).filter((p): p is Person => !!p);
+}
 
 function sendApolloError(res: import("express").Response, err: unknown): void {
   if (err instanceof ApolloError) {
@@ -22,7 +38,7 @@ function sendApolloError(res: import("express").Response, err: unknown): void {
 }
 
 router.get("/prospects/status", (_req, res): void => {
-  res.json(GetProspectStatusResponse.parse({ configured: !!apolloKey() }));
+  res.json(GetProspectStatusResponse.parse({ configured: leadDataConfigured(), apollo: !!apolloKey(), firecrawl: !!firecrawlKey() }));
 });
 
 router.post("/prospects/search", async (req, res): Promise<void> => {
@@ -35,13 +51,47 @@ router.post("/prospects/search", async (req, res): Promise<void> => {
     const result = await searchPeople(parsed.data);
     const ids = result.people.map((p) => p.apolloId);
     const existing = ids.length
-      ? await db.select({ apolloId: leadsTable.apolloId }).from(leadsTable).where(inArray(leadsTable.apolloId, ids))
+      ? await db
+          .select({ apolloId: leadsTable.apolloId, leadId: leadsTable.id, campaignId: leadsTable.campaignId, email: leadsTable.email, campaignName: campaignsTable.name })
+          .from(leadsTable)
+          .leftJoin(campaignsTable, eq(campaignsTable.id, leadsTable.campaignId))
+          .where(inArray(leadsTable.apolloId, ids))
       : [];
-    const have = new Set(existing.map((e) => e.apolloId));
+    const have = new Map(existing.map((e) => [e.apolloId, e]));
     res.json(
       SearchProspectsResponse.parse({
         ...result,
-        people: result.people.map((p) => ({ ...p, alreadyImported: have.has(p.apolloId) })),
+        people: result.people.map((p) => {
+          const lead = have.get(p.apolloId);
+          const known = revealed.get(p.apolloId);
+          return {
+            ...p,
+            lastName: known?.last_name ?? p.lastName,
+            email: lead?.email ?? (known ? emailOf(known) : null),
+            alreadyImported: !!lead,
+            leadId: lead?.leadId ?? null,
+            campaignId: lead?.campaignId ?? null,
+            campaignName: lead?.campaignName ?? null,
+          };
+        }),
+      }),
+    );
+  } catch (err) {
+    sendApolloError(res, err);
+  }
+});
+
+router.post("/prospects/reveal", async (req, res): Promise<void> => {
+  const parsed = RevealProspectsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  try {
+    const people = await reveal([...new Set(parsed.data.apolloIds)], parsed.data.source);
+    res.json(
+      RevealProspectsResponse.parse({
+        people: people.map((p) => ({ apolloId: p.id, firstName: p.first_name ?? "", lastName: p.last_name ?? "", email: emailOf(p) })),
       }),
     );
   } catch (err) {
@@ -62,7 +112,7 @@ router.post("/prospects/import", async (req, res): Promise<void> => {
   const have = new Set(existing.map((e) => e.apolloId));
   const fresh = [...new Set(parsed.data.apolloIds)].filter((id) => !have.has(id));
   try {
-    const people = fresh.length ? await revealPeople(fresh) : [];
+    const people = fresh.length ? await reveal(fresh, parsed.data.source) : [];
     const rows = people
       .filter((p) => p.first_name)
       .map((p) => {
@@ -70,7 +120,7 @@ router.post("/prospects/import", async (req, res): Promise<void> => {
         return {
           firstName: p.first_name!,
           lastName: p.last_name ?? "",
-          email: p.email && p.email_status !== "unavailable" ? p.email : null,
+          email: emailOf(p),
           linkedinUrl: p.linkedin_url ?? null,
           title: p.title ?? null,
           company: org?.company ?? p.organization_name ?? null,
@@ -81,12 +131,13 @@ router.post("/prospects/import", async (req, res): Promise<void> => {
           companyLinkedinUrl: org?.companyLinkedinUrl ?? null,
           notes: placeOf(p) ? `Based in ${placeOf(p)}` : null,
           apolloId: p.id,
+          timezone: guessTimezone(placeOf(p) ?? org?.companyLocation),
           campaignId: parsed.data.campaignId ?? null,
         };
       });
     if (rows.length) {
       await db.insert(leadsTable).values(rows);
-      await logActivity({ type: "lead_added", description: `${rows.length} leads imported from Apollo` });
+      await logActivity({ type: "lead_added", description: `${rows.length} leads imported from ${parsed.data.source === "firecrawl" ? "Firecrawl" : "Apollo"}` });
     }
     res.json(
       ImportProspectsResponse.parse({ imported: rows.length, skipped: parsed.data.apolloIds.length - rows.length }),

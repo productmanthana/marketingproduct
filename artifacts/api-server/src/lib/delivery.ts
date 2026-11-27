@@ -1,9 +1,10 @@
 import nodemailer from "nodemailer";
-import { eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import {
   db,
   leadsTable,
   mailboxesTable,
+  outreachMessagesTable,
   usageCountersTable,
   type ConversationRow,
   type LeadRow,
@@ -13,7 +14,7 @@ import {
 
 /** Outcome of handing a message to a real provider. */
 export type DeliveryResult =
-  | { status: "sent"; externalId: string | null; mailboxId?: number; threadId?: string | null; note?: string }
+  | { status: "sent"; externalId: string | null; mailboxId?: number; threadId?: string | null; note?: string; subject?: string }
   | { status: "recorded" }
   | { status: "failed"; error: string };
 
@@ -74,6 +75,27 @@ function baseUrl(settings: SettingsRow): string {
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+async function latestInboundSubject(conversationId: number): Promise<string | null> {
+  const [row] = await db
+    .select({ subject: outreachMessagesTable.subject })
+    .from(outreachMessagesTable)
+    .where(and(eq(outreachMessagesTable.conversationId, conversationId), eq(outreachMessagesTable.direction, "inbound"), isNotNull(outreachMessagesTable.subject)))
+    .orderBy(desc(outreachMessagesTable.createdAt))
+    .limit(1);
+  return row?.subject || null;
+}
+
+/** Message-IDs of the email thread, oldest first, for the In-Reply-To/References headers. */
+async function threadReferences(conversationId: number, threadId: string): Promise<string[]> {
+  const rows = await db
+    .select({ id: outreachMessagesTable.externalId })
+    .from(outreachMessagesTable)
+    .where(and(eq(outreachMessagesTable.conversationId, conversationId), isNotNull(outreachMessagesTable.externalId)))
+    .orderBy(asc(outreachMessagesTable.createdAt));
+  const ids = rows.map((r) => r.id!).filter((id) => id.startsWith("<"));
+  return [...new Set([threadId, ...ids])];
+}
+
 export async function sendEmail(args: {
   settings: SettingsRow;
   conversation: ConversationRow;
@@ -91,7 +113,14 @@ export async function sendEmail(args: {
   const base = baseUrl(args.settings);
   const unsubUrl = base ? `${base}/api/unsubscribe/${args.lead.unsubscribeToken}` : null;
   let text = args.body;
-  let html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5">${escapeHtml(args.body).replace(/\n/g, "<br>")}</div>`;
+  // Links become clickable; with tracking on they go through /api/c/<token> so clicks are counted.
+  const track = !!base && args.settings.trackOpens;
+  const linked = escapeHtml(args.body).replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)"']/g, (url) => {
+    const raw = url.replace(/&amp;/g, "&");
+    const href = track ? `${base}/api/c/${args.trackingToken}?u=${encodeURIComponent(raw)}` : url;
+    return `<a href="${href.replace(/&(?!amp;)/g, "&amp;")}">${url}</a>`;
+  });
+  let html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5">${linked.replace(/\n/g, "<br>")}</div>`;
   if (unsubUrl && args.settings.unsubscribeFooter) {
     text += `\n\n--\nDon't want to hear from me? Unsubscribe: ${unsubUrl}`;
     html += `<p style="font-size:11px;color:#888;margin-top:24px">Don't want to hear from me? <a href="${unsubUrl}">Unsubscribe</a></p>`;
@@ -100,14 +129,20 @@ export async function sendEmail(args: {
     html += `<img src="${base}/api/t/${args.trackingToken}.gif" width="1" height="1" alt="" style="display:none">`;
   }
   const threadId = args.conversation.externalThreadId;
+  // Follow-ups in an existing thread keep "Re: <original subject>" and reply to the latest message,
+  // otherwise Gmail/Outlook split them into a new conversation.
+  const references = threadId ? await threadReferences(args.conversation.id, threadId) : [];
+  // Answer in the thread the lead last replied in (their latest "Re: ..." subject), else the first email's subject.
+  const rootSubject = ((threadId ? await latestInboundSubject(args.conversation.id) : null) ?? args.conversation.subject ?? args.subject ?? "").replace(/^(re:\s*)+/i, "");
+  const subject = threadId && rootSubject ? `Re: ${rootSubject}` : (args.subject ?? args.conversation.subject ?? "(no subject)");
   try {
     const info = await transportFor(box).sendMail({
       from: { name: box.fromName, address: box.fromEmail },
       to: args.lead.email,
-      subject: args.subject ?? args.conversation.subject ?? "(no subject)",
+      subject,
       text,
       html,
-      ...(threadId ? { inReplyTo: threadId, references: [threadId] } : {}),
+      ...(threadId ? { inReplyTo: references.at(-1), references } : {}),
       ...(unsubUrl ? { list: { unsubscribe: { url: unsubUrl, comment: "Unsubscribe" } } } : {}),
     });
     const isNewDay = box.sentDate !== today();
@@ -115,7 +150,7 @@ export async function sendEmail(args: {
       .update(mailboxesTable)
       .set({ sentToday: isNewDay ? 1 : box.sentToday + 1, sentDate: today(), lastError: null })
       .where(eq(mailboxesTable.id, box.id));
-    return { status: "sent", externalId: info.messageId ?? null, mailboxId: box.id, threadId: threadId ?? info.messageId ?? null };
+    return { status: "sent", externalId: info.messageId ?? null, mailboxId: box.id, threadId: threadId ?? info.messageId ?? null, subject };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     await db.update(mailboxesTable).set({ lastError: error }).where(eq(mailboxesTable.id, box.id));

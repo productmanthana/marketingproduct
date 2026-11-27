@@ -17,4 +17,6 @@ export const LeadStatus = {
   meeting_booked: 'meeting_booked',
   not_interested: 'not_interested',
   unsubscribed: 'unsubscribed',
+  nurture: 'nurture',
+  bounced: 'bounced',
 } as const;

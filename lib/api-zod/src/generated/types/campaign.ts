@@ -26,6 +26,10 @@ export interface Campaign {
   replyTone: string;
   /** @nullable */
   meetingLink?: string | null;
+  /** Minutes between each person getting message 1; 0 sends to everyone at once */
+  sendGapMinutes: number;
+  /** Total spend on the campaign, in the CRM currency */
+  cost?: number;
   leadCount: number;
   sentCount: number;
   replyCount: number;

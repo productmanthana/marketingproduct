@@ -5,11 +5,13 @@ import { db, leadsTable, mailboxesTable, outreachMessagesTable, type MailboxRow 
 import { activeMailboxes } from "./delivery";
 import { getOrCreateConversation, processInbound } from "./outreach";
 import { logger } from "./logger";
+import { bouncedRecipients, recordBounce } from "./email-check";
+import { tendWarmupMail, WARMUP_HEADER } from "./warmup";
 
 const FIRST_SYNC_DAYS = 3;
 
 function imapClient(m: MailboxRow): ImapFlow {
-  return new ImapFlow({
+  const client = new ImapFlow({
     host: m.imapHost!,
     port: m.imapPort,
     secure: m.imapSecure,
@@ -17,6 +19,9 @@ function imapClient(m: MailboxRow): ImapFlow {
     logger: false,
     socketTimeout: 30_000,
   });
+  // A dropped/idle connection emits "error"; without a listener Node crashes the whole server.
+  client.on("error", (err) => logger.warn({ err: (err as Error).message, mailbox: m.id }, "IMAP connection error"));
+  return client;
 }
 
 export async function verifyImap(m: MailboxRow): Promise<void> {
@@ -29,8 +34,11 @@ export async function verifyImap(m: MailboxRow): Promise<void> {
 export function stripQuoted(text: string): string {
   const lines = text.replace(/\r/g, "").split("\n");
   const out: string[] = [];
-  for (const line of lines) {
-    if (/^On .+wrote:\s*$/i.test(line.trim()) || /^-{2,}\s*Original Message/i.test(line.trim()) || /^From: .+/i.test(line.trim())) break;
+  for (const [i, line] of lines.entries()) {
+    // Gmail often wraps "On <date> <name> <email>" and "wrote:" onto two lines.
+    const header = `${line.trim()} ${lines[i + 1]?.trim() ?? ""}`;
+    if (/^On .+wrote:/i.test(line.trim()) || (/^On /i.test(line.trim()) && /^On .+wrote:\s*$/i.test(header))) break;
+    if (/^-{2,}\s*Original Message/i.test(line.trim()) || /^From: .+/i.test(line.trim())) break;
     if (line.trim().startsWith(">")) continue;
     out.push(line);
   }
@@ -43,6 +51,8 @@ export async function syncMailbox(m: MailboxRow): Promise<number> {
   const client = imapClient(m);
   let processed = 0;
   let maxUid = m.lastUid ?? 0;
+  const warmupUids: number[] = [];
+  const own = (await activeMailboxes()).map((b) => b.fromEmail);
   await client.connect();
   try {
     const lock = await client.getMailboxLock("INBOX");
@@ -55,6 +65,18 @@ export async function syncMailbox(m: MailboxRow): Promise<number> {
         maxUid = Math.max(maxUid, msg.uid);
         if (!msg.source) continue;
         const parsed = await simpleParser(msg.source);
+        if (parsed.headers.has(WARMUP_HEADER)) {
+          warmupUids.push(msg.uid);
+          continue;
+        }
+        const bounced = bouncedRecipients(parsed, own);
+        if (bounced.length) {
+          for (const address of bounced) {
+            const [lead] = await db.select().from(leadsTable).where(ilike(leadsTable.email, address)).limit(1);
+            if (lead) await recordBounce(lead);
+          }
+          continue;
+        }
         const from = parsed.from?.value[0]?.address?.toLowerCase();
         if (!from || from === m.fromEmail.toLowerCase()) continue;
         const messageId = parsed.messageId ?? null;
@@ -73,6 +95,7 @@ export async function syncMailbox(m: MailboxRow): Promise<number> {
     } finally {
       lock.release();
     }
+    if (m.warmupEnabled) await tendWarmupMail(client, m, warmupUids);
   } finally {
     await client.logout().catch(() => undefined);
   }
@@ -99,10 +122,10 @@ export async function syncAllMailboxes(): Promise<{ mailboxes: number; newReplie
   return { mailboxes: boxes.length, newReplies, errors };
 }
 
-/** Background reply detection: checks every mailbox with IMAP settings every two minutes. */
+/** Background reply detection: checks every mailbox with IMAP settings right after start, then every 30 seconds. */
 export function startInboxSync(): void {
   let running = false;
-  setInterval(async () => {
+  const tick = async () => {
     if (running) return;
     running = true;
     try {
@@ -113,5 +136,7 @@ export function startInboxSync(): void {
     } finally {
       running = false;
     }
-  }, 120_000);
+  };
+  setTimeout(tick, 10_000);
+  setInterval(tick, 30_000);
 }

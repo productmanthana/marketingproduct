@@ -28,6 +28,10 @@ export interface Mailbox {
   sentToday: number;
   /** Sending limit for today after warm-up ramp */
   todayLimit: number;
+  warmupSentToday?: number;
+  warmupReceived?: number;
+  /** Warm-up emails that landed in spam and were moved to the inbox */
+  warmupSpam?: number;
   active: boolean;
   /** @nullable */
   lastSyncAt?: Date | null;

@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, ilike, inArray, isNull, or, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, type SQL } from "drizzle-orm";
 import {
   db,
   activitiesTable,
   callsTable,
+  dealsTable,
   leadsTable,
   outreachConversationsTable,
   tasksTable,
@@ -27,9 +28,11 @@ import {
   UpdateLeadResponse,
 } from "@workspace/api-zod";
 import { qualifyLead, researchCompany } from "../lib/ai";
+import { htmlToText, websiteFor } from "../lib/web";
 import { serializeTasks } from "./tasks";
-import { apolloKey, enrichOrganization } from "../lib/apollo";
+import { enrichOrganization, leadDataConfigured } from "../lib/apollo";
 import { logger } from "../lib/logger";
+import { ensureDealForBookedLead, serializeDeals } from "../lib/crm";
 import {
   getSettings,
   leadName,
@@ -50,6 +53,8 @@ router.get("/leads", async (req, res): Promise<void> => {
   const conds: SQL[] = [];
   if (q.data.status) conds.push(eq(leadsTable.status, q.data.status));
   if (q.data.campaignId) conds.push(eq(leadsTable.campaignId, q.data.campaignId));
+  if (q.data.ownerId) conds.push(eq(leadsTable.ownerId, q.data.ownerId));
+  if (q.data.hasSignals) conds.push(isNotNull(leadsTable.signals));
   if (q.data.search) {
     const s = `%${q.data.search}%`;
     conds.push(
@@ -103,34 +108,22 @@ router.post("/leads/import", async (req, res): Promise<void> => {
   );
 });
 
-const FREE_MAIL = /@(gmail|googlemail|yahoo|hotmail|outlook|live|icloud|me|aol|proton|protonmail|gmx|yandex|zoho)\./i;
-
-function websiteFor(lead: typeof leadsTable.$inferSelect): string | null {
-  if (lead.website?.trim()) return /^https?:\/\//.test(lead.website) ? lead.website.trim() : `https://${lead.website.trim()}`;
-  if (lead.email && !FREE_MAIL.test(lead.email)) return `https://${lead.email.split("@")[1]}`;
-  return null;
-}
-
-function htmlToText(html: string): string {
-  return html
-    .replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-
 type LeadRowT = typeof leadsTable.$inferSelect;
 
 /** Fill company details (industry, size, location, LinkedIn page) from Apollo. Only fills empty fields. */
 async function applyCompanyDetails(lead: LeadRowT): Promise<LeadRowT> {
-  if (!apolloKey()) return lead;
+  if (!leadDataConfigured()) return lead;
   const site = websiteFor(lead);
   if (!site) return lead;
   const domain = new URL(site).hostname.replace(/^www\./, "");
-  const org = await enrichOrganization(domain);
+  const org = await enrichOrganization(domain).catch((err: { status?: number }) => {
+    // Apollo can't read this lead's domain (bad/unknown website): skip it, keep the rest of the batch going.
+    if (err?.status && err.status >= 400 && err.status < 500 && err.status !== 429) {
+      logger.info({ leadId: lead.id, domain }, "Apollo has no company details for this domain");
+      return null;
+    }
+    throw err;
+  });
   if (!org) return lead;
   const patch = {
     company: lead.company || org.company,
@@ -145,7 +138,7 @@ async function applyCompanyDetails(lead: LeadRowT): Promise<LeadRowT> {
 }
 
 function companyDetailsInBackground(leads: LeadRowT[]): void {
-  if (!apolloKey()) return;
+  if (!leadDataConfigured()) return;
   const todo = leads.filter((l) => !l.companySize && websiteFor(l));
   if (!todo.length) return;
   void batchProcess(todo, (l) => applyCompanyDetails(l), { concurrency: 2, retries: 1 }).catch((err) =>
@@ -272,6 +265,7 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
     .orderBy(desc(activitiesTable.createdAt))
     .limit(50);
   const tasks = await db.select().from(tasksTable).where(eq(tasksTable.leadId, lead.id)).orderBy(asc(tasksTable.done), desc(tasksTable.createdAt));
+  const deals = await db.select().from(dealsTable).where(eq(dealsTable.leadId, lead.id)).orderBy(desc(dealsTable.createdAt));
   res.json(
     GetLeadResponse.parse({
       ...base,
@@ -279,6 +273,7 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
       calls: await serializeCalls(calls),
       activity: activity.map((a) => ({ ...a, leadName: leadName(lead) })),
       tasks: await serializeTasks(tasks),
+      deals: await serializeDeals(deals),
     }),
   );
 });
@@ -301,6 +296,10 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     changes.currentStep = 0;
     changes.nextStepAt = null;
   }
+  // A changed address has to be checked again before the next email.
+  if (parsed.data.email !== undefined && parsed.data.email !== before.email) Object.assign(changes, { emailStatus: null, emailCheckedAt: null });
+  // A new wait for message 1 is picked up on the next run, before anything was sent.
+  if (parsed.data.firstWaitHours !== undefined && before.currentStep === 0) changes.nextStepAt = null;
   const [lead] = await db
     .update(leadsTable)
     .set(changes)
@@ -312,6 +311,7 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
       description: `${leadName(lead!)} marked ${parsed.data.status.replace("_", " ")}`,
       leadId: lead!.id,
     });
+    if (parsed.data.status === "meeting_booked") await ensureDealForBookedLead(lead!.id);
   }
   const [out] = await serializeLeads([lead!]);
   res.json(UpdateLeadResponse.parse(out));

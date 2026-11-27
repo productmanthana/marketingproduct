@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, ilike, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, type SQL } from "drizzle-orm";
 import {
   db,
   campaignsTable,
   leadsTable,
+  objectionsTable,
   outreachConversationsTable,
   outreachMessagesTable,
 } from "@workspace/db";
@@ -23,6 +24,7 @@ import {
   UpdateConversationParams,
 } from "@workspace/api-zod";
 import { analyzeAndDraftReply } from "../lib/ai";
+import { calendarContext, schedulerFor } from "../lib/scheduling";
 import {
   getConversationDetail,
   getOrCreateConversation,
@@ -45,6 +47,9 @@ router.get("/conversations", async (req, res): Promise<void> => {
   const conds: SQL[] = [];
   if (q.data.channel) conds.push(eq(outreachConversationsTable.channel, q.data.channel));
   if (q.data.status) conds.push(eq(outreachConversationsTable.status, q.data.status));
+  if (q.data.ownerId) {
+    conds.push(inArray(outreachConversationsTable.leadId, db.select({ id: leadsTable.id }).from(leadsTable).where(eq(leadsTable.ownerId, q.data.ownerId))));
+  }
   const rows = await db
     .select()
     .from(outreachConversationsTable)
@@ -163,12 +168,17 @@ router.post("/conversations/:id/ai-draft", async (req, res): Promise<void> => {
     .from(outreachMessagesTable)
     .where(eq(outreachMessagesTable.conversationId, conv.id))
     .orderBy(asc(outreachMessagesTable.createdAt), asc(outreachMessagesTable.id));
+  const settings = await getSettings();
+  const scheduler = schedulerFor(settings);
+  const free = scheduler ? await scheduler.findFreeSlots().catch(() => null) : null;
   const draft = await analyzeAndDraftReply({
     lead: lead!,
     campaign,
-    settings: await getSettings(),
+    settings,
     channel: conv.channel,
     history,
+    objections: await db.select().from(objectionsTable),
+    calendar: free && scheduler && { ...(await calendarContext(lead!, free, scheduler)), canBook: false },
   });
   res.json(
     DraftAiReplyResponse.parse({
@@ -176,6 +186,7 @@ router.post("/conversations/:id/ai-draft", async (req, res): Promise<void> => {
       body: draft.body,
       sentiment: draft.sentiment,
       reasoning: draft.reasoning,
+      needsHuman: draft.needsHuman,
     }),
   );
 });

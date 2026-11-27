@@ -9,6 +9,13 @@ import mailboxesRouter from "./mailboxes";
 import tasksRouter from "./tasks";
 import publicRouter from "./public";
 import prospectsRouter from "./prospects";
+import accountsRouter from "./accounts";
+import dealsRouter from "./deals";
+import crmRouter from "./crm";
+import calendarRouter from "./calendar";
+import growthRouter from "./growth";
+import quotesRouter from "./quotes";
+import conversationMeetingsRouter from "./conversation-meetings";
 
 const router: IRouter = Router();
 
@@ -22,5 +29,12 @@ router.use(mailboxesRouter);
 router.use(tasksRouter);
 router.use(publicRouter);
 router.use(prospectsRouter);
+router.use(accountsRouter);
+router.use(dealsRouter);
+router.use(crmRouter);
+router.use(calendarRouter);
+router.use(growthRouter);
+router.use(quotesRouter);
+router.use(conversationMeetingsRouter);
 
 export default router;

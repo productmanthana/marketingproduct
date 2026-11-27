@@ -105,22 +105,87 @@ export async function generateSequence(
     }));
 }
 
+export async function writePitch(args: {
+  campaign: CampaignRow;
+  settings: SettingsRow;
+  notes: string;
+  goal: string;
+}): Promise<string> {
+  const r = await jsonCompletion<{ pitch: string }>(
+    `You help a non-technical business owner describe their offer for cold outreach. Write 2-3 plain, specific sentences: what they sell, who it is for, and the concrete result or benefit (use numbers only if the notes give them; never invent statistics or facts). No hype, no buzzwords, no bullet points. Respond as JSON: {"pitch": string}.`,
+    [
+      `Company: ${args.settings.companyName}`,
+      `Campaign name: ${args.campaign.name}`,
+      args.goal && `What they want prospects to do: ${args.goal}`,
+      args.notes ? `Their rough notes: ${args.notes}` : "They gave no notes; write a sensible draft from the company and campaign name that they can edit.",
+    ].filter(Boolean).join("\n"),
+  );
+  return (r.pitch ?? "").trim();
+}
+
 export type Sentiment =
   | "positive"
   | "neutral"
   | "negative"
   | "objection"
   | "out_of_office"
-  | "unsubscribe";
+  | "unsubscribe"
+  | "not_now"
+  | "referral";
+
+/** Someone the prospect pointed us to instead of themselves. */
+export type Referral = { firstName: string; lastName?: string | null; email?: string | null; title?: string | null };
 
 export type ReplyAnalysis = {
   sentiment: Sentiment;
-  leadStatus: "replied" | "interested" | "meeting_booked" | "not_interested" | "unsubscribed";
+  leadStatus: "replied" | "interested" | "meeting_booked" | "not_interested" | "unsubscribed" | "nurture";
   shouldReply: boolean;
   subject: string | null;
   body: string;
   reasoning: string;
+  /** Set when a person must decide or supply something before this reply can go out. */
+  needsHuman: string | null;
+  /** "YYYY-MM-DD HH:MM" of the free calendar slot the prospect agreed to, when the AI should book it. */
+  bookSlot: string | null;
+  /** out_of_office: the day they are back. */
+  returnDate?: string | null;
+  /** not_now: days until reconnecting. */
+  followUpDays?: number | null;
+  referral?: Referral | null;
+  /** The reply follows an answer from the objection library. */
+  usedApprovedAnswer?: boolean;
 };
+
+/** Free slots on the connected Google Calendar; canBook=false means offer times but never confirm a booking. */
+export type CalendarContext = {
+  timezone: string;
+  summary: string;
+  minutes: number;
+  canBook: boolean;
+  inviteNote?: string;
+  /** The prospect's own time zone when known. */
+  leadTimezone?: string | null;
+  /** Their already-booked meeting, e.g. "2026-11-27 03:30 (UTC)". */
+  existingMeeting?: string | null;
+};
+
+function calendarRules(c: CalendarContext | null | undefined): string {
+  if (!c) return "";
+  const now = new Date().toLocaleString("en-US", { timeZone: c.timezone, dateStyle: "full", timeStyle: "short" });
+  const booking = c.canBook
+    ? `If the prospect named a day/time that matches a free slot, or said any time works, set bookSlot to that slot as "YYYY-MM-DD HH:MM" (for "any time" pick the earliest slot) and set leadStatus to meeting_booked; the body confirms the exact day, date and time with the time zone and says ${c.inviteNote ?? "a calendar invite with the meeting link is on its way"}. `
+    : `Never confirm a booking; set bookSlot null. `;
+  const theirZone = c.leadTimezone && c.leadTimezone !== c.timezone
+    ? `The prospect's time zone is ${c.leadTimezone}: convert times they write from ${c.leadTimezone} to ${c.timezone} before matching slots, and in the reply give times in ${c.leadTimezone}. `
+    : `Assume times the prospect writes are in ${c.timezone} and state the time zone in the reply. `;
+  const existing = c.existingMeeting
+    ? `They already have a meeting booked for ${c.existingMeeting}. If they ask to reschedule or move it, handle the new time exactly like a booking request (bookSlot = the new free slot); the old booking is moved automatically, so say it has been rescheduled. `
+    : "";
+  return ` A calendar is connected, so you can schedule ${c.minutes}-minute meetings yourself and do NOT need a booking link. Now it is ${now} (${c.timezone}). Free slots (${c.timezone}; every listed range is bookable at any quarter hour inside it):\n${c.summary || "none in the next week"}\n${theirZone}${existing}${booking}If they asked for a time range (e.g. "between 2 and 3 pm"), book the earliest free start inside it. If they want to meet but gave no time, or their day/time is not free (weekends are not available), say so briefly and offer 2-3 specific free slots close to what they asked (same time of day on the nearest days, with time zone), and set bookSlot null. Only use the listed slots. Meetings are ${c.minutes} minutes; if they ask for a different length, still book at their time and mention the length in one short line. Never set needsHuman because of time zones, meeting length, rescheduling, an unavailable day, or a missing booking link: you can handle all of these yourself.`;
+}
+
+/** Bracketed fill-ins like "[meeting link]" or "[your product]" that must never reach a prospect. */
+export const hasPlaceholder = (text: string) => /\[[^\]\n]{2,60}\]|\{\{[^}]+\}\}/.test(text);
 
 export async function analyzeAndDraftReply(args: {
   lead: LeadRow;
@@ -128,7 +193,12 @@ export async function analyzeAndDraftReply(args: {
   settings: SettingsRow;
   channel: string;
   history: MessageRow[];
+  calendar?: CalendarContext | null;
+  objections?: { objection: string; answer: string }[];
 }): Promise<ReplyAnalysis> {
+  const library = args.objections?.length
+    ? ` Approved answers to common objections (when the prospect raises one of these, base your reply on the approved answer, adapted to them, and set usedApprovedAnswer true):\n${args.objections.map((o, i) => `${i + 1}. Objection: ${o.objection}\n   Answer: ${o.answer}`).join("\n")}\n`
+    : "";
   const transcript = args.history
     .map(
       (m) =>
@@ -136,11 +206,14 @@ export async function analyzeAndDraftReply(args: {
     )
     .join("\n\n");
   const result = await jsonCompletion<ReplyAnalysis>(
-    `You are an autonomous SDR handling replies to outbound outreach. Read the conversation and the prospect's latest message. Classify sentiment as one of: positive, neutral, negative, objection, out_of_office, unsubscribe. Choose leadStatus: replied (generic), interested, meeting_booked (only if they confirmed a time), not_interested, unsubscribed. Then write the best next reply that moves toward the campaign goal: answer questions directly, handle objections with empathy and one concrete point, propose the meeting link when they show interest. If they asked to stop or unsubscribe, set shouldReply false and body to a one-line polite confirmation. Never invent pricing, customers or features that are not in the context; if you lack info, offer to cover it on a call. ${CHANNEL_RULES[args.channel] ?? ""} Respond as JSON: {"sentiment": string, "leadStatus": string, "shouldReply": boolean, "subject": string|null, "body": string, "reasoning": string (one sentence explaining the classification and approach)}.`,
+    `You are an autonomous SDR handling replies to outbound outreach. Read the conversation and the prospect's latest message. Classify sentiment as one of: positive, neutral, negative, objection, out_of_office (auto-reply saying they are away), unsubscribe, not_now (interested in principle but asks to reconnect later), referral (says someone else is the right person). Choose leadStatus: replied (generic), interested, meeting_booked (only if they confirmed a time), not_interested, unsubscribed, nurture (for not_now). For out_of_office set returnDate to the date they are back as "YYYY-MM-DD" if stated, else null, and set shouldReply false. For not_now set followUpDays to when to reconnect (e.g. "next quarter" = 90, "next month" = 30; default 90) and reply with a short gracious note. For referral set referral to the person they named {"firstName","lastName","email","title"} (only what they wrote; null fields if unknown) and thank them briefly. Then write the best next reply that moves toward the campaign goal: answer questions directly, handle objections with empathy and one concrete point, propose the meeting link when they show interest, but only if a "Meeting booking link" is given in the context. Never write placeholders or bracketed fill-ins such as [meeting link], [time], [your company]; only use facts from the context. Set needsHuman to a short reason (e.g. "Prospect wants to meet but no booking link is set", "Asked about pricing") whenever the right reply needs something you do not have: a booking link, specific times or dates to offer, pricing, contracts, or any commitment by the team; otherwise set needsHuman null. When needsHuman is set, still write your best draft for the team to edit.${calendarRules(args.calendar)} ${library}If they asked to stop or unsubscribe, set shouldReply false and body to a one-line polite confirmation. Never invent pricing, customers or features that are not in the context; if you lack info, offer to cover it on a call. ${CHANNEL_RULES[args.channel] ?? ""} Respond as JSON: {"sentiment": string, "leadStatus": string, "shouldReply": boolean, "subject": string|null, "body": string, "reasoning": string (one sentence explaining the classification and approach), "needsHuman": string|null, "bookSlot": string|null, "returnDate": string|null, "followUpDays": number|null, "referral": object|null, "usedApprovedAnswer": boolean}.`,
     `${senderContext(args.settings, args.campaign)}\n\nProspect:\n${leadProfile(args.lead)}\n\nConversation so far:\n${transcript}`,
   );
+  const placeholder = hasPlaceholder(`${result.subject ?? ""}\n${result.body}`);
   return {
     ...result,
+    bookSlot: args.calendar?.canBook ? (result.bookSlot ?? null) : null,
+    needsHuman: result.needsHuman || (placeholder ? "Draft contains a placeholder that needs your real details" : null),
     subject: args.channel === "email" ? (result.subject ?? null) : null,
   };
 }
@@ -220,4 +293,65 @@ export function voiceAgentPrompt(args: {
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+export async function dealInsight(args: {
+  deal: { name: string; stage: string; amount: number; probability: number; closeDate: Date | null; nextStep: string | null; description: string | null; createdAt: Date; stageChangedAt: Date };
+  currency: string;
+  accountName: string | null;
+  lead: LeadRow | null;
+  notes: string[];
+  activity: string[];
+  settings: SettingsRow;
+}): Promise<{ summary: string; risks: string[]; nextActions: string[]; winLikelihood: number }> {
+  const d = args.deal;
+  const days = (from: Date) => Math.round((Date.now() - from.getTime()) / 86_400_000);
+  const result = await jsonCompletion<{ summary: string; risks?: string[]; nextActions?: string[]; winLikelihood?: number }>(
+    `You are a sales manager reviewing one B2B opportunity. Using only the facts given, return: summary (2 sentences on where the deal stands), risks (0-3 short, specific risks such as a stale stage, missing close date, no recent contact, no decision maker), nextActions (2-3 concrete next steps the rep should take this week), winLikelihood (0-100). Respond as JSON: {"summary": string, "risks": string[], "nextActions": string[], "winLikelihood": number}.`,
+    [
+      `Today: ${new Date().toISOString().slice(0, 10)}`,
+      `Seller: ${args.settings.companyName}`,
+      `Deal: ${d.name}`,
+      `Stage: ${d.stage} (for ${days(d.stageChangedAt)} days), open ${days(d.createdAt)} days`,
+      `Amount: ${d.amount} ${args.currency}, rep probability ${d.probability}%`,
+      `Close date: ${d.closeDate ? d.closeDate.toISOString().slice(0, 10) : "not set"}`,
+      d.nextStep && `Next step: ${d.nextStep}`,
+      d.description && `Description: ${d.description}`,
+      args.accountName && `Account: ${args.accountName}`,
+      args.lead && `Primary contact:\n${leadProfile(args.lead)}\nLead status: ${args.lead.status}`,
+      args.notes.length && `Notes:\n${args.notes.join("\n")}`,
+      args.activity.length && `Recent activity (newest first):\n${args.activity.join("\n")}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+  return {
+    summary: result.summary,
+    risks: (result.risks ?? []).slice(0, 3),
+    nextActions: (result.nextActions ?? []).slice(0, 3),
+    winLikelihood: Math.max(0, Math.min(100, Math.round(Number(result.winLikelihood) || 0))),
+  };
+}
+
+export async function meetingFollowUp(args: {
+  lead: LeadRow;
+  campaign: CampaignRow | null;
+  settings: SettingsRow;
+  meetingTitle: string;
+  when: string;
+  notes: string | null;
+}): Promise<{ subject: string; body: string }> {
+  const r = await jsonCompletion<{ subject: string; body: string }>(
+    `You write the follow-up email a salesperson sends right after a meeting with a prospect. Thank them for their time, recap what was discussed (only from the notes; if there are no notes keep the recap general and do not invent details), and propose one clear next step toward the campaign goal. Under 130 words, plain text, warm and professional, include the signature if provided. Never use placeholders or brackets. Respond as JSON: {"subject": string, "body": string}.`,
+    `${senderContext(args.settings, args.campaign)}\n\nProspect:\n${leadProfile(args.lead)}\n\nMeeting: ${args.meetingTitle} on ${args.when}\nMeeting notes:\n${args.notes?.trim() || "(none)"}`,
+  );
+  return { subject: r.subject, body: r.body };
+}
+
+export async function detectSignals(args: { lead: LeadRow; pages: { url: string; text: string }[] }): Promise<string[]> {
+  const r = await jsonCompletion<{ signals?: string[] }>(
+    `You look for buying signals on a company's website for B2B sales: hiring (name the roles), recent funding or investment, new product or service launches, expansion (new offices, markets, locations), new leadership, partnerships or awards. Use only facts clearly stated in the text, and include the date when the text gives one. Return at most 4 short signals (under 15 words each), most recent and relevant first. Return an empty list when there are none. Respond as JSON: {"signals": string[]}.`,
+    `Company: ${args.lead.company ?? "(unknown)"}\n\n${args.pages.map((p) => `Page ${p.url}:\n${p.text}`).join("\n\n")}`,
+  );
+  return (r.signals ?? []).map((x) => String(x).trim()).filter(Boolean).slice(0, 4);
 }

@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
-import { ChevronLeft, Globe, Linkedin, Mail, MessagesSquare, Phone, PhoneCall, Trash2, History, Sparkles, CheckSquare } from "lucide-react";
-import { useGetLead, useUpdateLead, useDeleteLead, useCreateCall, useEnrichLead, useQualifyLeads } from "@workspace/api-client-react";
+import { ChevronLeft, Radar, Globe, Linkedin, Mail, MessagesSquare, Phone, PhoneCall, Trash2, Sparkles, CheckSquare, KanbanSquare, Building2 } from "lucide-react";
+import { useGetLead, useUpdateLead, useDeleteLead, useCreateCall, useEnrichLead, useQualifyLeads, useListAccounts, useScanLeadSignals, useVerifyLeadEmails, useListTeam } from "@workspace/api-client-react";
+import { MeetingsPanel } from "@/components/meetings";
+import { Timeline } from "@/components/timeline";
+import { ConvertLeadDialog } from "@/components/crm/convert-lead-dialog";
+import { useMoney } from "@/components/crm/format";
+import { StageBadge } from "@/pages/pipeline";
 import { Input } from "@/components/ui/input";
 import { FitBadge } from "@/components/fit-badge";
 import { AddTask, TaskRow } from "@/pages/tasks";
@@ -12,7 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { Panel, Rows, ErrorBox, Empty, ChannelTag, Pill, Initials, AiWorking, ago, label, chColor, errMsg, useRefreshAll, type Ch } from "@/components/bits";
 
-const STATUSES = ["new", "contacted", "replied", "interested", "meeting_booked", "not_interested", "unsubscribed"];
+const STATUSES = ["new", "contacted", "replied", "interested", "meeting_booked", "nurture", "not_interested", "unsubscribed", "bounced"];
 
 export default function LeadDetail() {
   const id = Number(useParams().id);
@@ -28,6 +33,12 @@ export default function LeadDetail() {
   const [notes, setNotes] = useState<string | null>(null);
   const [website, setWebsite] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const accounts = useListAccounts();
+  const scan = useScanLeadSignals();
+  const verify = useVerifyLeadEmails();
+  const team = useListTeam();
+  const { money } = useMoney();
   const l = q.data;
   if (q.isLoading) return <div className="p-8"><Rows n={5} h={80} /></div>;
   if (q.isError || !l) return <ErrorBox onRetry={() => q.refetch()} />;
@@ -54,6 +65,7 @@ export default function LeadDetail() {
           onClick={() => call.mutate({ data: { leadId: id, campaignId: l.campaignId ?? undefined, objective: "Follow up and book a meeting" } }, { onSuccess: (c) => { refresh(); nav(`/calls?id=${c.id}`); } })}>
           <PhoneCall className="mr-1 h-4 w-4" />{call.isPending ? "Scheduling..." : "Schedule call"}
         </Button>
+        <Button onClick={() => setConverting(true)} data-testid="button-convert-lead"><KanbanSquare className="mr-1 h-4 w-4" />Convert to deal</Button>
         <Button variant="outline" size="icon" onClick={() => setConfirm(true)} data-testid="button-delete-lead"><Trash2 className="h-4 w-4" /></Button>
       </div>
 
@@ -79,11 +91,37 @@ export default function LeadDetail() {
                   {l.companyLinkedinUrl && <a href={l.companyLinkedinUrl} target="_blank" rel="noreferrer" className="block truncate text-primary hover:underline" data-testid="link-company-linkedin">Company LinkedIn page</a>}
                 </div>
               )}
+              {l.email && (
+                <div className="flex items-center justify-between gap-2 px-4 py-2.5"><span className="text-muted-foreground">Email check</span>
+                  <span className="flex items-center gap-2">{l.emailStatus ? <Pill value={l.emailStatus} /> : <span className="text-xs text-muted-foreground">not checked</span>}
+                    <button className="text-xs text-primary hover:underline disabled:opacity-50" disabled={verify.isPending} data-testid="button-verify-lead-email"
+                      onClick={() => verify.mutate({ data: { leadIds: [id] } }, { onSuccess: () => refresh() })}>{verify.isPending ? "checking..." : "check"}</button></span></div>
+              )}
+              <div className="flex items-center justify-between gap-3 px-4 py-2"><span className="text-muted-foreground">Owner</span>
+                <select className="h-8 max-w-[160px] rounded-md border border-input bg-card px-1.5 text-xs" value={l.ownerId ?? ""} data-testid="select-lead-owner"
+                  onChange={(e) => upd.mutate({ id, data: { ownerId: e.target.value ? Number(e.target.value) : null } }, { onSuccess: () => { refresh(); toast({ title: "Owner updated" }); } })}>
+                  <option value="">Unassigned</option>{team.data?.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select></div>
+              <div className="flex justify-between px-4 py-2.5"><span className="text-muted-foreground">Time zone</span><span className="text-xs" data-testid="text-lead-timezone">{l.timezone ?? (l.companyLocation ? "from location" : "yours")}</span></div>
+              <div className="space-y-1.5 px-4 py-2.5" data-testid="block-signals">
+                <div className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-muted-foreground"><Radar className="h-3.5 w-3.5" />Buying signals</span>
+                  <button className="text-xs text-primary hover:underline disabled:opacity-50" disabled={scan.isPending} data-testid="button-scan-lead-signals"
+                    onClick={() => scan.mutate({ data: { leadIds: [id] } }, { onSuccess: (r) => { refresh(); toast({ title: r.skipped ? "Add the company website first" : r.withSignals ? "Signals found" : "No signals on their website right now" }); }, onError: (e) => toast({ title: "Scan failed", description: errMsg(e), variant: "destructive" }) })}>{scan.isPending ? "scanning..." : l.signalsAt ? "rescan" : "scan"}</button></div>
+                {l.signals ? <ul className="list-disc space-y-0.5 pl-4 text-xs">{l.signals.split("\n").map((s) => <li key={s}>{s}</li>)}</ul>
+                  : <p className="text-xs text-muted-foreground">{l.signalsAt ? `None found ${ago(l.signalsAt)}` : "Hiring, funding, launches or expansion from their website."}</p>}
+              </div>
               <div className="flex items-center justify-between gap-2 px-4 py-2.5"><span className="text-muted-foreground">ICP fit</span>
                 <span className="flex items-center gap-2"><FitBadge score={l.fitScore} reason={l.fitReason} />
                   <button className="text-xs text-primary hover:underline disabled:opacity-50" disabled={qualify.isPending} data-testid="button-score-lead"
                     onClick={() => qualify.mutate({ data: { leadIds: [id] } }, { onSuccess: () => refresh(), onError: (e) => toast({ title: "Could not score", description: errMsg(e), variant: "destructive" }) })}>{qualify.isPending ? "scoring..." : l.fitScore == null ? "score" : "rescore"}</button></span></div>
               {l.fitReason && <p className="px-4 py-2.5 text-xs text-muted-foreground" data-testid="text-fit-reason">{l.fitReason}</p>}
+              <div className="flex items-center justify-between gap-3 px-4 py-2"><span className="flex items-center gap-1.5 text-muted-foreground"><Building2 className="h-3.5 w-3.5" />Account</span>
+                <span className="flex min-w-0 items-center gap-2">
+                  {l.accountId && <Link href={`/accounts/${l.accountId}`} className="truncate text-xs text-primary hover:underline" data-testid="link-lead-account">open</Link>}
+                  <select className="h-8 max-w-[160px] rounded-md border border-input bg-card px-1.5 text-xs" value={l.accountId ?? ""} data-testid="select-lead-account"
+                    onChange={(e) => upd.mutate({ id, data: { accountId: e.target.value ? Number(e.target.value) : null } }, { onSuccess: () => { refresh(); toast({ title: e.target.value ? "Linked to account" : "Removed from account" }); } })}>
+                    <option value="">None</option>{accounts.data?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select></span></div>
               <div className="flex justify-between px-4 py-2.5"><span className="text-muted-foreground">Campaign</span>{l.campaignId ? <Link href={`/campaigns/${l.campaignId}`} className="hover:text-primary">{l.campaignName}</Link> : "-"}</div>
               <div className="flex justify-between px-4 py-2.5"><span className="text-muted-foreground">Step</span><span className="font-mono">{l.currentStep ?? 0}</span></div>
               <div className="flex justify-between px-4 py-2.5"><span className="text-muted-foreground">Last touch</span><span>{ago(l.lastContactedAt)}</span></div>
@@ -107,6 +145,14 @@ export default function LeadDetail() {
                   <Pill value={c.status} /><span className="font-mono text-[10px] text-muted-foreground">{ago(c.lastMessageAt)}</span>
                 </Link>))}</div>}
           </Panel>
+          <MeetingsPanel leadId={id} delay={65} />
+          <Panel title={`Deals · ${l.deals.length}`} delay={70} action={<button className="text-xs text-primary hover:underline" onClick={() => setConverting(true)} data-testid="button-lead-new-deal">+ Deal</button>}>
+            {!l.deals.length ? <Empty icon={KanbanSquare} title="No deals" body="Convert this lead when there is a real opportunity. Booking a meeting opens one automatically." /> :
+              <div className="divide-y divide-border">{l.deals.map((d) => (
+                <Link key={d.id} href={`/deals/${d.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40" data-testid={`link-lead-deal-${d.id}`}>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{d.name}</span><StageBadge stage={d.stage} /><span className="font-mono text-sm">{money(d.amount)}</span>
+                </Link>))}</div>}
+          </Panel>
           <Panel title={`Tasks · ${l.tasks.filter((t) => !t.done).length} open`} delay={80}>
             <AddTask leadId={id} />
             {!l.tasks.length ? <div className="p-4"><Empty icon={CheckSquare} title="No tasks" body="Call next steps and replies that need you show up here." /></div> :
@@ -119,20 +165,10 @@ export default function LeadDetail() {
                   <ChannelTag channel="call" /><span className="flex-1 truncate text-sm">{c.objective ?? "Call"}</span>{c.outcome && <span className="text-xs text-muted-foreground">{c.outcome}</span>}<Pill value={c.status} />
                 </Link>))}</div>}
           </Panel>
-          <Panel title="Timeline" delay={140}>
-            {!l.activity.length ? <Empty icon={History} title="Nothing yet" /> :
-              <ol className="relative p-4 pl-8">
-                <span className="absolute bottom-4 left-[19px] top-4 w-px bg-border" />
-                {l.activity.map((a, i) => (
-                  <li key={a.id} className="rise relative pb-3" style={{ animationDelay: `${i * 30}ms` }}>
-                    <span className="absolute -left-[17px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-card" style={{ background: a.type === "ai_reply" ? "hsl(var(--primary))" : a.channel ? chColor(a.channel as Ch) : "hsl(var(--muted-foreground))" }} />
-                    <div className="text-sm">{a.description}</div>
-                    <div className="font-mono text-[10px] text-muted-foreground">{label(a.type)} · {ago(a.createdAt)}</div>
-                  </li>))}
-              </ol>}
-          </Panel>
+          <Panel title="Timeline" delay={140}><Timeline activity={l.activity} /></Panel>
         </div>
       </div>
+      {converting && <ConvertLeadDialog lead={l} onClose={() => setConverting(false)} />}
       <AlertDialog open={confirm} onOpenChange={setConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle>Delete {name}?</AlertDialogTitle><AlertDialogDescription>Removes the lead with its conversations and calls.</AlertDialogDescription></AlertDialogHeader>

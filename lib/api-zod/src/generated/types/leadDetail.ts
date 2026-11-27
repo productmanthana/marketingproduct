@@ -8,10 +8,12 @@
 import type { Activity } from './activity';
 import type { Call } from './call';
 import type { Conversation } from './conversation';
+import type { Deal } from './deal';
 import type { Lead } from './lead';
 import type { Task } from './task';
 
 export type LeadDetail = Lead & {
+  deals: Deal[];
   conversations: Conversation[];
   calls: Call[];
   activity: Activity[];

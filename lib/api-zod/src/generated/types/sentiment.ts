@@ -16,4 +16,6 @@ export const Sentiment = {
   objection: 'objection',
   out_of_office: 'out_of_office',
   unsubscribe: 'unsubscribe',
+  not_now: 'not_now',
+  referral: 'referral',
 } as const;

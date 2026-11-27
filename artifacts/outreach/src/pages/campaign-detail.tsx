@@ -1,10 +1,10 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
-import { ArrowDown, ArrowUp, Check, ChevronLeft, Pause, Play, Eye, Pencil, Plus, Rocket, RotateCcw, Sparkles, Trash2, UserPlus, Users, Workflow } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronLeft, Lock, Pause, Play, Eye, Pencil, Plus, Rocket, RotateCcw, Search, Sparkles, Trash2, Upload, UserPlus, Users, Workflow } from "lucide-react";
 import {
   useGetCampaign, useUpdateCampaign, useDeleteCampaign, useAddSequenceStep, useUpdateSequenceStep, useDeleteSequenceStep,
-  useEnrollLeads, useGenerateCampaignSequence, useRunCampaign, useListLeads, usePreviewSequenceStep,
+  useEnrollLeads, useGenerateCampaignSequence, useRunCampaign, useListLeads, usePreviewSequenceStep, useWriteCampaignPitch, useUpdateLead,
 } from "@workspace/api-client-react";
 import type { Lead, RunResult, SequenceStep, StepPreview } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -16,9 +16,27 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { WaitPicker, waitLabel } from "@/components/wait-picker";
+import { SendPace, gapLabel } from "@/components/send-pace";
+import { PersonWaitPicker } from "@/components/person-wait-picker";
+import { QuickAddPerson } from "@/components/quick-add-person";
+import { SpreadsheetToCampaign } from "@/components/spreadsheet-upload";
+import { ApolloToCampaign } from "@/components/apollo-to-campaign";
+import { RecipientList } from "@/components/recipient-list";
+import { SentLog } from "@/components/sent-log";
 import { PageHeader, Panel, Rows, ErrorBox, Empty, ChannelTag, Pill, AiWorking, Initials, useRefreshAll, CH, chColor, TONE_OPTIONS, ago, errMsg, type Ch } from "@/components/bits";
 
 const STATE_LABEL: Record<string, string> = { draft: "Not started", active: "Sending", paused: "Paused", completed: "Finished" };
+
+function WizardNav({ onBack, onNext, nextLabel = "Next", nextDisabled, hint }: { onBack?: () => void; onNext?: () => void; nextLabel?: string; nextDisabled?: boolean; hint?: string | null }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t border-border bg-muted/30 p-4" data-testid="wizard-nav">
+      {onBack && <Button variant="outline" size="lg" onClick={onBack} data-testid="button-wizard-back"><ArrowLeft className="mr-1.5 h-4 w-4" />Back</Button>}
+      {hint && <span className="text-sm text-muted-foreground" data-testid="text-wizard-hint">{hint}</span>}
+      {onNext && <Button size="lg" className="ml-auto" disabled={nextDisabled} onClick={onNext} data-testid="button-wizard-next">{nextLabel}<ArrowRight className="ml-1.5 h-4 w-4" /></Button>}
+    </div>
+  );
+}
 
 function FlowSection({ n, title, hint, done, action, children }: { n: number; title: string; hint: string; done: boolean; action?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -52,13 +70,17 @@ export default function CampaignDetail() {
   const [stepEdit, setStepEdit] = useState<SequenceStep | "new" | null>(null);
   const [enroll, setEnroll] = useState(false);
   const [preview, setPreview] = useState<SequenceStep | null>(null);
+  const [active, setActive] = useState<number | null>(null);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const updLead = useUpdateLead();
+  const [removing, setRemoving] = useState(false);
   const c = q.data;
 
   if (q.isLoading) return <div className="p-8"><Rows n={6} h={70} /></div>;
   if (q.isError || !c) return <ErrorBox onRetry={() => q.refetch()} />;
 
-  const patch = (data: Parameters<typeof update.mutate>[0]["data"], msg = "Saved") =>
-    update.mutate({ id, data }, { onSuccess: () => { refresh(); toast({ title: msg }); } });
+  const patch = (data: Parameters<typeof update.mutate>[0]["data"], msg = "Saved", onDone?: () => void, description?: string) =>
+    update.mutate({ id, data }, { onSuccess: () => { refresh(); toast({ title: msg, description }); onDone?.(); } });
 
   const steps = [...c.steps].sort((a, b) => a.stepOrder - b.stepOrder);
   const offerDone = (c.productPitch ?? "").trim().length >= 20;
@@ -70,7 +92,12 @@ export default function CampaignDetail() {
     { n: 4, label: "Start sending", done: started },
   ];
   const missing = !offerDone ? "Finish step 1: describe what you're offering." : !steps.length ? "Finish step 2: add at least one message." : !c.leads.length ? "Finish step 3: add the people who should receive it." : null;
+  const cur = active ?? (flow.find((f) => !f.done)?.n ?? 4);
+  const go = (n: number) => { setActive(n); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const locked = (n: number) => flow.slice(0, n - 1).some((f) => !f.done);
+  const writeMessages = (title: string) => gen.mutate({ id }, { onSuccess: () => { refresh(); toast({ title }); }, onError: () => toast({ title: "AI could not write the messages", variant: "destructive" }) });
   const firstCh = steps[0]?.channel as Ch | undefined;
+  const firstWait = !!steps[0] && (steps[0].delayDays > 0 || steps[0].delayHours > 0);
   const runIt = () => run.mutate({ id }, {
     onSuccess: (r) => { setResult(r); refresh(); toast({ title: r.messagesSent || r.callsScheduled ? "Sent!" : "Nothing new to send right now", description: `${r.messagesSent} messages sent, ${r.callsScheduled} calls added to your call list` }); },
     onError: (e) => toast({ title: "Could not send", description: errMsg(e), variant: "destructive" }),
@@ -86,16 +113,24 @@ export default function CampaignDetail() {
       </PageHeader>
 
       <div className="mx-auto max-w-4xl space-y-5 p-6 md:p-8">
-        <ol className="grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="flow-progress">
-          {flow.map((f) => (
-            <li key={f.n}>
-              <a href={`#step-${f.n}`} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${f.done ? "border-[hsl(var(--ch-linkedin)/.4)] bg-[hsl(var(--ch-linkedin)/.08)]" : "border-border bg-card hover:border-primary/40"}`}>
-                <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold ${f.done ? "bg-[hsl(var(--ch-linkedin))] text-white" : "bg-muted text-muted-foreground"}`}>{f.done ? <Check className="h-3.5 w-3.5" /> : f.n}</span>
-                <span className={f.done ? "font-medium" : "text-muted-foreground"}>{f.label}</span>
-              </a>
-            </li>
-          ))}
-        </ol>
+        <div>
+          <p className="mb-2 text-sm font-medium text-muted-foreground" data-testid="text-step-of">Step {cur} of 4</p>
+          <ol className="grid grid-cols-2 gap-2 md:grid-cols-4" data-testid="flow-progress">
+            {flow.map((f) => {
+              const on = f.n === cur;
+              const lock = locked(f.n);
+              return (
+                <li key={f.n}>
+                  <button type="button" disabled={lock} onClick={() => go(f.n)} title={lock ? `Finish step ${f.n - 1} first` : undefined} aria-current={on ? "step" : undefined} data-testid={`button-goto-step-${f.n}`}
+                    className={`flex w-full items-center gap-2 rounded-lg border-2 px-3 py-2.5 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${on ? "border-primary bg-primary/5" : f.done ? "border-[hsl(var(--ch-linkedin)/.4)] bg-[hsl(var(--ch-linkedin)/.08)] hover:border-[hsl(var(--ch-linkedin))]" : "border-border bg-card hover:border-primary/40"}`}>
+                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold ${on ? "bg-primary text-primary-foreground" : f.done ? "bg-[hsl(var(--ch-linkedin))] text-white" : "bg-muted text-muted-foreground"}`}>{f.done && !on ? <Check className="h-4 w-4" /> : lock ? <Lock className="h-3.5 w-3.5" /> : f.n}</span>
+                    <span className={on || f.done ? "font-semibold" : "text-muted-foreground"}>{f.label}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
 
         {started && (
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-card-border bg-border md:grid-cols-4">
@@ -105,14 +140,16 @@ export default function CampaignDetail() {
           </div>
         )}
 
-        <FlowSection n={1} title="What are you offering?" hint="Tell the AI what you sell and what you want people to do. It uses this to write every message and every reply." done={offerDone}>
-          <SettingsForm c={c} onSave={(d) => patch(d)} saving={update.isPending} />
-        </FlowSection>
+        {cur === 1 && <FlowSection n={1} title="What are you offering?" hint="Tell the AI what you sell and what you want people to do. It uses this to write every message and every reply." done={offerDone}>
+          <SettingsForm c={c} saving={update.isPending} onSave={(d) => d.productPitch.trim().length >= 20
+            ? patch(d, "Saved", () => { go(2); if (!steps.length) writeMessages("Your messages are ready. Read them, change anything you like, then press Next."); })
+            : patch(d, "Saved. One more thing before step 2", undefined, "Fill in \"What do you sell, and who is it for?\" (or press Write it with AI) so the AI can write your messages.")} />
+        </FlowSection>}
 
-        <FlowSection n={2} title="Your messages" hint="The messages each person receives, in order. The AI personalises every one for the person it goes to. Follow-ups stop automatically as soon as someone replies." done={steps.length > 0}
+        {cur === 2 && <FlowSection n={2} title="Your messages" hint="The messages each person receives, in order. The AI personalises every one for the person it goes to. Follow-ups stop automatically as soon as someone replies." done={steps.length > 0}
           action={steps.length > 0 && <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" disabled={gen.isPending || !offerDone} title={!offerDone ? "Finish step 1 first" : undefined} data-testid="button-generate-sequence"
-              onClick={() => gen.mutate({ id }, { onSuccess: () => { refresh(); toast({ title: "Messages rewritten by AI" }); }, onError: () => toast({ title: "AI could not write the messages", variant: "destructive" }) })}>
+            <Button size="sm" variant="outline" disabled={gen.isPending} data-testid="button-generate-sequence"
+              onClick={() => writeMessages("Messages rewritten by AI")}>
               <Sparkles className="mr-1 h-3.5 w-3.5 text-primary" />{gen.isPending ? "Writing..." : "Rewrite all with AI"}
             </Button>
             <Button size="sm" onClick={() => setStepEdit("new")} data-testid="button-add-step"><Plus className="mr-1 h-3.5 w-3.5" />Add message</Button>
@@ -121,22 +158,26 @@ export default function CampaignDetail() {
           {!steps.length && !gen.isPending ? (
             <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
               <Workflow className="h-8 w-8 text-muted-foreground" />
-              <p className="max-w-md text-sm text-muted-foreground">{offerDone ? "Let the AI write a series of emails, LinkedIn messages and call reminders for you, or write your own." : "Finish step 1 first, then the AI can write your messages for you."}</p>
+              <p className="max-w-md text-sm text-muted-foreground">Let the AI write a series of emails, LinkedIn messages and call reminders for you, or write your own.</p>
               <div className="flex flex-wrap justify-center gap-2">
-                <Button disabled={!offerDone} data-testid="button-generate-sequence-empty"
-                  onClick={() => gen.mutate({ id }, { onSuccess: () => { refresh(); toast({ title: "Your messages are ready" }); }, onError: () => toast({ title: "AI could not write the messages", variant: "destructive" }) })}>
+                <Button data-testid="button-generate-sequence-empty"
+                  onClick={() => writeMessages("Your messages are ready")}>
                   <Sparkles className="mr-1 h-4 w-4" />Write them for me with AI</Button>
                 <Button variant="outline" onClick={() => setStepEdit("new")} data-testid="button-add-step-empty"><Pencil className="mr-1 h-4 w-4" />I'll write my own</Button>
               </div>
             </div>
           ) : (
             <ol className="relative p-4">
+              {steps.length > 1 && <li className="mb-4 rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground" data-testid="text-followup-explainer">
+                Each person gets message 1 first. <b className="text-foreground">If they don't reply</b>, the next one goes out after the wait you choose on each message (from 1 hour to 2 weeks), sometimes on a different channel so they have more chances to see it. As soon as they reply, the rest stop.
+              </li>}
               {steps.map((s, i) => <StepRow key={s.id} s={s} i={i} last={i === steps.length - 1} campaignId={id} prev={steps[i - 1]} next={steps[i + 1]} onEdit={() => setStepEdit(s)} onPreview={() => setPreview(s)} />)}
             </ol>
           )}
-        </FlowSection>
+          <WizardNav onBack={() => go(1)} onNext={() => go(3)} nextDisabled={!steps.length} hint={!steps.length ? "Add at least one message to continue." : null} />
+        </FlowSection>}
 
-        <FlowSection n={3} title="Who should receive them?" hint="Pick people from your lead list. Need more people? Find them on the Find leads page or add them on the Leads page." done={c.leads.length > 0}
+        {cur === 3 && <FlowSection n={3} title="Who should receive them?" hint="Click Add people to type someone in, upload a spreadsheet, search Apollo, or pick from your lead list." done={c.leads.length > 0}
           action={<Button size="sm" variant={c.leads.length ? "outline" : "default"} onClick={() => setEnroll(true)} data-testid="button-enroll-leads"><UserPlus className="mr-1 h-3.5 w-3.5" />Add people</Button>}>
           {!c.leads.length ? (
             <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
@@ -149,10 +190,40 @@ export default function CampaignDetail() {
             </div>
           ) : (
             <div className="divide-y divide-border">
+              <div className="flex flex-wrap items-center gap-3 bg-muted/30 px-4 py-2 text-xs" data-testid="bar-select-people">
+                <Checkbox checked={picked.size === c.leads.length ? true : picked.size ? "indeterminate" : false}
+                  onCheckedChange={(v) => setPicked(v === true ? new Set(c.leads.map((l) => l.id)) : new Set())} data-testid="checkbox-select-all-people" />
+                <span className="text-muted-foreground">{picked.size ? `${picked.size} of ${c.leads.length} selected` : `Tick people to stop sending to them · ${c.leads.length} will receive messages`}</span>
+                {picked.size > 0 && (
+                  <Button size="sm" variant="outline" className="ml-auto h-7 text-destructive" disabled={removing} data-testid="button-remove-selected-people"
+                    onClick={async () => {
+                      setRemoving(true);
+                      try {
+                        await Promise.all([...picked].map((lid) => updLead.mutateAsync({ id: lid, data: { campaignId: null } })));
+                        toast({ title: `Removed ${picked.size} from this campaign`, description: "They won't get these messages. They stay in your Leads list." });
+                        setPicked(new Set()); refresh();
+                      } catch (e) { toast({ title: "Could not remove", description: errMsg(e), variant: "destructive" }); }
+                      finally { setRemoving(false); }
+                    }}>
+                    <Trash2 className="mr-1 h-3 w-3" />{removing ? "Removing..." : `Don't send to ${picked.size}`}
+                  </Button>
+                )}
+              </div>
               {c.leads.map((l, i) => (
                 <Link key={l.id} href={`/leads/${l.id}`} className="rise flex items-center gap-3 px-4 py-2.5 hover:bg-muted/40" style={{ animationDelay: `${i * 20}ms` }} data-testid={`link-enrolled-${l.id}`}>
+                  <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="flex">
+                    <Checkbox checked={picked.has(l.id)} data-testid={`checkbox-person-${l.id}`}
+                      onCheckedChange={(v) => setPicked((p) => { const n = new Set(p); if (v === true) n.add(l.id); else n.delete(l.id); return n; })} />
+                  </span>
                   <Initials name={`${l.firstName} ${l.lastName}`} />
                   <div className="min-w-0 flex-1"><div className="text-sm font-medium">{l.firstName} {l.lastName}</div><div className="truncate text-xs text-muted-foreground">{[l.email, l.company].filter(Boolean).join(" · ")}</div></div>
+                  {(l.currentStep ?? 0) === 0 && (
+                    <span onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      Wait
+                      <PersonWaitPicker hours={l.firstWaitHours} disabled={updLead.isPending} testId={`select-person-wait-${l.id}`}
+                        onChange={(h) => updLead.mutate({ id: l.id, data: { firstWaitHours: h } }, { onSuccess: refresh })} />
+                    </span>
+                  )}
                   <span className="text-xs text-muted-foreground">{(l.currentStep ?? 0) === 0 ? "nothing sent yet" : `got ${Math.min(l.currentStep ?? 0, steps.length)} of ${steps.length} messages`}</span>
                   <Pill value={l.status} />
                   {steps.length > 0 && (l.currentStep ?? 0) >= steps.length && (
@@ -164,11 +235,14 @@ export default function CampaignDetail() {
                   )}
                 </Link>
               ))}
+              <SendPace minutes={c.sendGapMinutes} people={c.leads.length} disabled={update.isPending}
+                onChange={(m) => update.mutate({ id, data: { sendGapMinutes: m } }, { onSuccess: refresh })} />
             </div>
           )}
-        </FlowSection>
+          <WizardNav onBack={() => go(2)} onNext={() => go(4)} nextDisabled={!c.leads.length} hint={!c.leads.length ? "Add at least one person to continue." : null} />
+        </FlowSection>}
 
-        <FlowSection n={4} title={started ? "Sending" : "Start sending"} hint={started ? "This campaign runs on its own: follow-ups go out on schedule and the AI answers replies. Check the Inbox to see conversations." : "Everything is checked. Nothing is sent until you press the button."} done={started}>
+        {cur === 4 && <FlowSection n={4} title={started ? "Sending" : "Start sending"} hint={started ? "This campaign runs on its own: follow-ups go out on schedule and the AI answers replies. Check the Inbox to see conversations." : "Everything is checked. Nothing is sent until you press the button."} done={started}>
           <div className="space-y-4 p-4">
             {run.isPending && <AiWorking text="Personalising and sending messages" />}
             {result && !run.isPending && (
@@ -181,19 +255,22 @@ export default function CampaignDetail() {
               <p className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground" data-testid="text-launch-missing">{missing}</p>
             ) : !started && (
               <p className="text-sm" data-testid="text-launch-summary">
-                When you press <b>Start sending</b>, <b>{c.leads.length} {c.leads.length === 1 ? "person" : "people"}</b> will get message 1{firstCh ? ` by ${CH[firstCh].label.toLowerCase()}` : ""} right away.
+                When you press <b>Start sending</b>, <b>{c.leads.length} {c.leads.length === 1 ? "person" : "people"}</b> will get message 1{firstCh ? ` by ${CH[firstCh].label.toLowerCase()}` : ""}{firstWait ? ` ${waitLabel(steps[0]!)} later` : " right away"}{c.sendGapMinutes && c.leads.length > 1 ? `, ${gapLabel(c.sendGapMinutes)}` : ""}.
                 {steps.length > 1 && ` The other ${steps.length - 1} follow-up${steps.length > 2 ? "s go" : " goes"} out automatically on schedule.`}
                 {c.autoReply ? " When someone replies, the AI answers for you (anything negative waits for you in the Inbox)." : " Replies wait for you in the Inbox."}
               </p>
             )}
+            <RecipientList leads={c.leads} />
             <div className="flex flex-wrap gap-2">
               <Button size="lg" disabled={run.isPending || !!missing} onClick={runIt} data-testid="button-run-campaign">
                 <Rocket className={`mr-1.5 h-4 w-4 ${run.isPending ? "animate-bounce" : ""}`} />{run.isPending ? "Sending..." : started ? "Send anything due now" : "Start sending"}
               </Button>
               {started && <Link href="/inbox" className="inline-flex h-10 items-center rounded-md border border-input px-4 text-sm hover:bg-muted" data-testid="link-open-inbox">Open Inbox</Link>}
             </div>
+            {started && <SentLog campaignId={c.id} />}
           </div>
-        </FlowSection>
+          <WizardNav onBack={() => go(3)} />
+        </FlowSection>}
       </div>
 
       {stepEdit && <StepDialog campaignId={id} step={stepEdit === "new" ? null : stepEdit} onClose={() => setStepEdit(null)} />}
@@ -218,13 +295,24 @@ function SettingsForm({ c, onSave, saving }: { c: CampaignLike; onSave: (d: { na
   const forId = useRef(c.id);
   useEffect(() => { if (forId.current !== c.id) { forId.current = c.id; setF(init()); } }, [c.id]); // eslint-disable-line
   const set = (k: keyof typeof f, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
+  const write = useWriteCampaignPitch();
+  const { toast } = useToast();
+  const aiPitch = () => write.mutate({ id: c.id, data: { notes: f.productPitch, goal: f.goal } }, {
+    onSuccess: (r) => { set("productPitch", r.pitch); toast({ title: "AI wrote your pitch", description: "Read it, change anything that's not right, then save." }); },
+    onError: (e) => toast({ title: "AI could not write it", description: errMsg(e), variant: "destructive" }),
+  });
   return (
     <div className="grid gap-4 p-4 md:grid-cols-2">
       <div><Label>Campaign name <span className="font-normal text-muted-foreground">(only you see this)</span></Label><Input value={f.name} onChange={(e) => set("name", e.target.value)} data-testid="input-edit-name" /></div>
       <div><Label>What do you want people to do?</Label><Input value={f.goal} onChange={(e) => set("goal", e.target.value)} placeholder="Book a 20 minute intro call" data-testid="input-edit-goal" /></div>
       <div className="md:col-span-2"><Label>What do you sell, and who is it for?</Label>
-        <Textarea rows={4} value={f.productPitch} onChange={(e) => set("productPitch", e.target.value)} placeholder="Example: We help clinics fill empty appointment slots with an automated WhatsApp reminder service. Clinics using it see 30% fewer no-shows. Setup takes one day." data-testid="input-edit-pitch" />
-        <p className={`mt-1 text-xs ${f.productPitch.trim().length >= 20 ? "text-muted-foreground" : "text-amber-700"}`}>2–3 sentences. The more specific you are, the better the AI writes.</p></div>
+        <Textarea rows={4} value={f.productPitch} disabled={write.isPending} onChange={(e) => set("productPitch", e.target.value)} placeholder="Example: We help clinics fill empty appointment slots with an automated WhatsApp reminder service. Clinics using it see 30% fewer no-shows. Setup takes one day." data-testid="input-edit-pitch" />
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <Button type="button" variant="outline" size="sm" onClick={aiPitch} disabled={write.isPending} data-testid="button-ai-pitch">
+            <Sparkles className={`mr-1.5 h-3.5 w-3.5 text-primary ${write.isPending ? "animate-spin" : ""}`} />{write.isPending ? "Writing..." : f.productPitch.trim() ? "Improve with AI" : "Write it with AI"}
+          </Button>
+          <p className={`text-xs ${f.productPitch.trim().length >= 20 ? "text-muted-foreground" : "text-amber-700"}`}>Not sure what to write? Type a few rough words (like "WhatsApp reminders for clinics") and let the AI turn them into 2–3 clear sentences.</p>
+        </div></div>
       <div><Label>How should messages sound?</Label>
         <select className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm" value={f.replyTone} onChange={(e) => set("replyTone", e.target.value)} data-testid="select-edit-tone">
           {Array.from(new Set([...TONE_OPTIONS, f.replyTone])).map((t) => <option key={t}>{t}</option>)}
@@ -234,10 +322,14 @@ function SettingsForm({ c, onSave, saving }: { c: CampaignLike; onSave: (d: { na
         <span><b>Let AI answer replies for me</b><span className="block text-xs text-muted-foreground">When someone replies, the AI writes and sends the answer. Negative replies always wait for you.</span></span>
         <Switch checked={f.autoReply} onCheckedChange={(v) => set("autoReply", v)} data-testid="switch-edit-autoreply" />
       </label>
-      <div className="md:col-span-2"><Button onClick={() => onSave(f)} disabled={saving} data-testid="button-save-campaign">{saving ? "Saving..." : "Save"}</Button></div>
+      <div className="-mx-4 -mb-4 flex border-t border-border bg-muted/30 p-4 md:col-span-2">
+        <Button size="lg" className="ml-auto" onClick={() => onSave(f)} disabled={saving} data-testid="button-save-campaign">{saving ? "Saving..." : <>Save and continue<ArrowRight className="ml-1.5 h-4 w-4" /></>}</Button>
+      </div>
     </div>
   );
 }
+
+const ROW_LABEL: Record<Ch, string> = { email: "Email", linkedin: "LinkedIn message", call: "Phone call" };
 
 function StepRow({ s, i, last, campaignId, prev, next, onEdit, onPreview }: { s: SequenceStep; i: number; last: boolean; campaignId: number; prev?: SequenceStep; next?: SequenceStep; onEdit: () => void; onPreview: () => void }) {
   const upd = useUpdateSequenceStep();
@@ -257,9 +349,13 @@ function StepRow({ s, i, last, campaignId, prev, next, onEdit, onPreview }: { s:
       <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white" style={{ background: chColor(ch) }}><I className="h-4 w-4" /></div>
       <div className="group min-w-0 flex-1 rounded-lg border border-border bg-background/60 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold">Message {i + 1}</span>
-          <ChannelTag channel={ch} />
-          <span className="text-xs text-muted-foreground">{i === 0 ? "sent right away when you start" : s.delayDays === 0 ? "same day as the previous one" : `${s.delayDays} day${s.delayDays === 1 ? "" : "s"} after the previous one`}{ch === "call" && " · added to your call list"}</span>
+          <span className="text-sm font-semibold" style={{ color: chColor(ch) }}>{i + 1}. {ROW_LABEL[ch]}</span>
+          <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            Wait
+            <WaitPicker value={s} disabled={upd.isPending} className="h-7 text-xs text-foreground" testId={`select-step-wait-${s.id}`}
+              onChange={(w) => upd.mutate({ id: campaignId, stepId: s.id, data: w }, { onSuccess: refresh })} />
+            {i === 0 ? "after you press Start sending" : "after the previous message, only if they haven't replied"}{ch === "call" && " · added to your call list"}
+          </span>
           <div className="ml-auto flex gap-0.5 opacity-60 group-hover:opacity-100">
             <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!prev || upd.isPending} onClick={() => swap(prev)} data-testid={`button-step-up-${s.id}`}><ArrowUp className="h-3.5 w-3.5" /></Button>
             <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!next || upd.isPending} onClick={() => swap(next)} data-testid={`button-step-down-${s.id}`}><ArrowDown className="h-3.5 w-3.5" /></Button>
@@ -268,10 +364,34 @@ function StepRow({ s, i, last, campaignId, prev, next, onEdit, onPreview }: { s:
             <Button size="icon" variant="ghost" className="h-7 w-7 hover:text-destructive" disabled={del.isPending} onClick={() => del.mutate({ id: campaignId, stepId: s.id }, { onSuccess: refresh })} data-testid={`button-step-delete-${s.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
           </div>
         </div>
+        {s.variantTemplate && <div className="mt-1.5 font-mono text-[10px] uppercase tracking-wider text-primary">Version A</div>}
         {s.subject && <div className="mt-1.5 text-sm font-semibold">{s.subject}</div>}
         <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm text-muted-foreground">{s.template}</p>
+        {s.variantTemplate && <AbTest s={s} />}
       </div>
     </li>
+  );
+}
+
+const rate = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "-");
+
+/** Version B of a step and how both versions perform. */
+function AbTest({ s }: { s: SequenceStep }) {
+  const stats = s.abStats ?? [];
+  return (
+    <div className="mt-3 space-y-2 border-t border-dashed border-border pt-3" data-testid={`ab-test-${s.id}`}>
+      <div className="font-mono text-[10px] uppercase tracking-wider text-primary">Version B</div>
+      {s.variantSubject && <div className="text-sm font-semibold">{s.variantSubject}</div>}
+      <p className="line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">{s.variantTemplate}</p>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {stats.map((v) => (
+          <span key={v.variant} className={`rounded-md border px-2 py-1 ${s.abWinner === v.variant ? "border-primary bg-primary/10 text-primary" : "border-border"}`} data-testid={`ab-stat-${s.id}-${v.variant}`}>
+            <b>{v.variant.toUpperCase()}</b> · {v.sent} sent · {rate(v.opened, v.sent)} opens · {rate(v.replied, v.sent)} replies{s.abWinner === v.variant && " · winner"}
+          </span>
+        ))}
+        <span className="text-muted-foreground">{s.abWinner ? "Everyone now gets the winner." : "Half get A, half get B. The better one wins after 30 sends each."}</span>
+      </div>
+    </div>
   );
 }
 
@@ -279,12 +399,20 @@ function StepDialog({ campaignId, step, onClose }: { campaignId: number; step: S
   const add = useAddSequenceStep();
   const upd = useUpdateSequenceStep();
   const refresh = useRefreshAll();
-  const [f, setF] = useState({ channel: (step?.channel ?? "email") as Ch, delayDays: String(step?.delayDays ?? 3), subject: step?.subject ?? "", template: step?.template ?? "" });
+  const [f, setF] = useState({ channel: (step?.channel ?? "email") as Ch, wait: { delayDays: step?.delayDays ?? 1, delayHours: step?.delayHours ?? 0 }, subject: step?.subject ?? "", template: step?.template ?? "" });
+  const [ab, setAb] = useState({ on: !!step?.variantTemplate, subject: step?.variantSubject ?? "", template: step?.variantTemplate ?? "" });
   const pending = add.isPending || upd.isPending;
+  const testing = ab.on && f.channel !== "call" && !!ab.template.trim();
   const save = () => {
-    const data = { channel: f.channel, delayDays: Number(f.delayDays) || 0, subject: f.channel === "email" ? f.subject : undefined, template: f.template };
-    const done = { onSuccess: () => { refresh(); onClose(); } };
-    if (step) upd.mutate({ id: campaignId, stepId: step.id, data }, done); else add.mutate({ id: campaignId, data }, done);
+    const data = { channel: f.channel, ...f.wait, subject: f.channel === "email" ? f.subject : undefined, template: f.template };
+    // Changing version B restarts the test.
+    const changedB = ab.template !== (step?.variantTemplate ?? "") || ab.subject !== (step?.variantSubject ?? "");
+    const variant = testing
+      ? { variantTemplate: ab.template, variantSubject: f.channel === "email" ? ab.subject || null : null, ...(changedB ? { abWinner: null } : {}) }
+      : { variantTemplate: null };
+    const done = () => { refresh(); onClose(); };
+    if (step) upd.mutate({ id: campaignId, stepId: step.id, data: { ...data, ...variant } }, { onSuccess: done });
+    else add.mutate({ id: campaignId, data }, { onSuccess: (created) => testing ? upd.mutate({ id: campaignId, stepId: created.id, data: variant }, { onSuccess: done }) : done() });
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -299,11 +427,22 @@ function StepDialog({ campaignId, step, onClose }: { campaignId: number; step: S
                 style={on ? { borderColor: chColor(k), background: chColor(k, 0.1), color: chColor(k) } : {}}><I className="h-4 w-4" />{CH[k].label}</button>;
             })}
           </div>
-          <div><Label className="text-xs">How many days after the previous message? (the first message always goes right away)</Label><Input type="number" min={0} value={f.delayDays} onChange={(e) => setF({ ...f, delayDays: e.target.value })} data-testid="input-step-delay" /></div>
+          <div><Label className="text-xs">How long to wait after the previous message? (for message 1: after you press Start sending)</Label>
+            <WaitPicker value={f.wait} onChange={(w) => setF({ ...f, wait: w })} className="h-9 w-full" testId="input-step-delay" /></div>
           {f.channel === "email" && <div><Label className="text-xs">Subject</Label><Input value={f.subject} onChange={(e) => setF({ ...f, subject: e.target.value })} data-testid="input-step-subject" /></div>}
           <div><Label className="text-xs">{f.channel === "call" ? "What should this call achieve?" : "Message"}</Label>
             <Textarea rows={7} value={f.template} onChange={(e) => setF({ ...f, template: e.target.value })} placeholder="Hi {{firstName}}, noticed {{company}}..." data-testid="input-step-template" />
             <p className="mt-1 text-xs text-muted-foreground">{"Write it roughly; the AI polishes and personalises it for each person. Tip: {{firstName}} and {{company}} are replaced with their name and company."}</p></div>
+          {f.channel !== "call" && (
+            <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
+              <label className="flex items-center justify-between text-sm"><span><b>A/B test</b><span className="block text-xs text-muted-foreground">Try a second version. Half get A, half get B; after 30 sends each the one with more replies wins.</span></span>
+                <Switch checked={ab.on} onCheckedChange={(v) => setAb({ ...ab, on: v })} data-testid="switch-step-ab" /></label>
+              {ab.on && <>
+                {f.channel === "email" && <div><Label className="text-xs">Subject B</Label><Input value={ab.subject} onChange={(e) => setAb({ ...ab, subject: e.target.value })} placeholder="Leave empty to test only the message" data-testid="input-step-subject-b" /></div>}
+                <div><Label className="text-xs">Message B</Label><Textarea rows={5} value={ab.template} onChange={(e) => setAb({ ...ab, template: e.target.value })} data-testid="input-step-template-b" /></div>
+              </>}
+            </div>
+          )}
         </div>
         <DialogFooter><Button onClick={save} disabled={!f.template.trim() || pending} data-testid="button-save-step">{pending ? "Saving..." : "Save message"}</Button></DialogFooter>
       </DialogContent>
@@ -318,17 +457,19 @@ function PreviewDialog({ campaignId, step, leads, onClose }: { campaignId: numbe
   const [out, setOut] = useState<StepPreview | null>(null);
   const run = usePreviewSequenceStep();
   const { toast } = useToast();
+  const ready = leads.length > 0 || !others.isLoading;
+  useEffect(() => { if (ready && !leadId) go(pool[0] ? String(pool[0].id) : "sample"); }, [ready]); // eslint-disable-line
   const go = (lid: string) => {
     setLeadId(lid);
     setOut(null);
-    if (lid) run.mutate({ id: campaignId, stepId: step.id, data: { leadId: Number(lid) } }, { onSuccess: setOut, onError: (e) => toast({ title: "Preview failed", description: errMsg(e), variant: "destructive" }) });
+    run.mutate({ id: campaignId, stepId: step.id, data: lid === "sample" ? {} : { leadId: Number(lid) } }, { onSuccess: setOut, onError: (e) => toast({ title: "Preview failed", description: errMsg(e), variant: "destructive" }) });
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle className="font-display text-xl">See message {step.stepOrder} as a real person would</DialogTitle></DialogHeader>
         <select className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm" value={leadId} onChange={(e) => go(e.target.value)} data-testid="select-preview-lead">
-          <option value="">{pool.length ? "Choose a person" : "Add people first"}</option>
+          <option value="sample">Sample person (Priya Sharma, Operations Manager at Sample Co)</option>
           {pool.map((l) => <option key={l.id} value={l.id}>{l.firstName} {l.lastName}{l.company ? ` (${l.company})` : ""}</option>)}
         </select>
         {run.isPending && <AiWorking text="Personalizing this step the way it will be sent" />}
@@ -339,6 +480,7 @@ function PreviewDialog({ campaignId, step, leads, onClose }: { campaignId: numbe
             <p className="mt-1 whitespace-pre-wrap text-sm">{out.body}</p>
           </div>
         )}
+        {leadId === "sample" && <p className="text-xs text-muted-foreground" data-testid="text-sample-preview">This is a made-up person so you can see how it reads. Once you add people in step 3, you can pick a real one here.</p>}
         <DialogFooter><Button variant="outline" disabled={!leadId || run.isPending} onClick={() => go(leadId)} data-testid="button-regenerate-preview">Regenerate</Button></DialogFooter>
       </DialogContent>
     </Dialog>
@@ -353,16 +495,29 @@ function EnrollDialog({ campaignId, enrolled, onClose }: { campaignId: number; e
   const { toast } = useToast();
   const [sel, setSel] = useState<number[]>([]);
   const avail = (q.data ?? []).filter((l) => !enrolled.includes(l.id));
+  const [mode, setMode] = useState<"type" | "sheet" | "apollo" | null>(null);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className={mode === "apollo" ? "max-w-2xl" : "max-w-lg"}>
         <DialogHeader><DialogTitle className="font-display text-xl">Add people to this campaign</DialogTitle></DialogHeader>
+        <div className="grid grid-cols-3 gap-2">
+          <Button variant={mode === "type" ? "default" : "outline"} onClick={() => setMode(mode === "type" ? null : "type")} size="sm" className="px-2 text-xs" data-testid="button-show-quick-add"><Plus className="mr-1.5 h-4 w-4" />Type in a person</Button>
+          <Button variant={mode === "sheet" ? "default" : "outline"} onClick={() => setMode(mode === "sheet" ? null : "sheet")} size="sm" className="px-2 text-xs" data-testid="button-show-spreadsheet"><Upload className="mr-1.5 h-4 w-4" />Upload spreadsheet</Button>
+          <Button variant={mode === "apollo" ? "default" : "outline"} onClick={() => setMode(mode === "apollo" ? null : "apollo")} size="sm" className="px-2 text-xs" data-testid="button-show-apollo"><Search className="mr-1.5 h-4 w-4" />Search Apollo</Button>
+        </div>
+        {mode === "type" && <QuickAddPerson campaignId={campaignId} onDone={onClose} />}
+        {mode === "sheet" && <SpreadsheetToCampaign campaignId={campaignId} onDone={onClose} />}
+        {mode === "apollo" && <ApolloToCampaign campaignId={campaignId} onDone={onClose} />}
+        <div className="text-xs font-medium text-muted-foreground">Or pick from your lead list</div>
         <Input placeholder="Search by name, company or email" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-enroll-search" />
         <div className="max-h-80 overflow-y-auto rounded-lg border border-border">
-          {q.isLoading ? <Rows n={4} h={36} /> : !avail.length ? <p className="p-6 text-center text-sm text-muted-foreground">No one left to add. Find new people on the Find leads page.</p> : avail.map((l) => (
+          {q.isLoading ? <Rows n={4} h={36} /> : !avail.length ? <p className="p-6 text-center text-sm text-muted-foreground">No one in your lead list yet. Type someone in or upload a spreadsheet above, or find people on the Find leads page.</p> : avail.map((l) => (
             <label key={l.id} className="flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-0 hover:bg-muted/40" data-testid={`row-enroll-${l.id}`}>
               <Checkbox checked={sel.includes(l.id)} onCheckedChange={(v) => setSel((s) => v ? [...s, l.id] : s.filter((x) => x !== l.id))} />
-              <span className="flex-1 text-sm">{l.firstName} {l.lastName}<span className="ml-2 text-xs text-muted-foreground">{l.company}</span></span>
+              <span className="min-w-0 flex-1 text-sm">
+                <span>{l.firstName} {l.lastName}<span className="ml-2 text-xs text-muted-foreground">{l.company}</span></span>
+                <span className="block truncate text-xs text-muted-foreground">{l.email || "No email"}</span>
+              </span>
               {l.campaignName && <span className="text-[10px] text-muted-foreground">moves from {l.campaignName}</span>}
             </label>
           ))}

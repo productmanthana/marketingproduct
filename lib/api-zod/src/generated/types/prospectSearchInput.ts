@@ -5,6 +5,7 @@
  * Outreach Autopilot API
  * OpenAPI spec version: 0.1.0
  */
+import type { LeadSource } from './leadSource';
 
 export interface ProspectSearchInput {
   titles?: string[];
@@ -16,4 +17,5 @@ export interface ProspectSearchInput {
   keywords?: string;
   /** @minimum 1 */
   page?: number;
+  source?: LeadSource;
 }

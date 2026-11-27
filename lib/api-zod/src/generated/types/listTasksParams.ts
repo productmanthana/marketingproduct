@@ -9,4 +9,5 @@
 export type ListTasksParams = {
 done?: boolean;
 leadId?: number;
+dealId?: number;
 };

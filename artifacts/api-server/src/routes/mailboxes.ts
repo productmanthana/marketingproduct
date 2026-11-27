@@ -22,7 +22,8 @@ const router: IRouter = Router();
 /** Passwords never leave the server. */
 function serialize(m: MailboxRow) {
   const { smtpPass, imapPass, ...rest } = m;
-  return { ...rest, sentToday: sentTodayOf(m), todayLimit: todayLimit(m) };
+  const day = new Date().toISOString().slice(0, 10);
+  return { ...rest, sentToday: sentTodayOf(m), todayLimit: todayLimit(m), warmupSentToday: m.warmupDate === day ? m.warmupSentToday : 0 };
 }
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));

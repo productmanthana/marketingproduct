@@ -5,6 +5,7 @@
  * Outreach Autopilot API
  * OpenAPI spec version: 0.1.0
  */
+import type { LeadSource } from './leadSource';
 
 export interface ProspectImportInput {
   /**
@@ -13,4 +14,5 @@ export interface ProspectImportInput {
      */
   apolloIds: string[];
   campaignId?: number;
+  source?: LeadSource;
 }

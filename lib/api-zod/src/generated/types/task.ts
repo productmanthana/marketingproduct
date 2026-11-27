@@ -13,6 +13,10 @@ export interface Task {
   leadId?: number | null;
   /** @nullable */
   leadName?: string | null;
+  /** @nullable */
+  dealId?: number | null;
+  /** @nullable */
+  dealName?: string | null;
   title: string;
   /** @nullable */
   dueAt?: Date | null;

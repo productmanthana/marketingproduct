@@ -1,9 +1,11 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, notInArray } from "drizzle-orm";
 import {
   db,
   callsTable,
   campaignsTable,
+  dealsTable,
   leadsTable,
+  notesTable,
   outreachConversationsTable,
   outreachMessagesTable,
   type CallRow,
@@ -80,6 +82,16 @@ export async function summarizeAndFollowUp(call: CallRow): Promise<CallRow> {
       channel: "email",
       leadId: ctx.lead.id,
     });
+  }
+  // Save the summary on the lead's open deal so the CRM has the full picture.
+  const [deal] = await db
+    .select({ id: dealsTable.id })
+    .from(dealsTable)
+    .where(and(eq(dealsTable.leadId, ctx.lead.id), notInArray(dealsTable.stage, ["closed_won", "closed_lost"])))
+    .limit(1);
+  if (deal) {
+    await db.insert(notesTable).values({ dealId: deal.id, body: `Call summary (${new Date().toISOString().slice(0, 10)}): ${result.outcome}\n${result.summary}${result.nextStep ? `\nNext step: ${result.nextStep}` : ""}` });
+    if (result.nextStep) await db.update(dealsTable).set({ nextStep: result.nextStep, updatedAt: new Date() }).where(eq(dealsTable.id, deal.id));
   }
   if (result.nextStep && result.leadStatus !== "not_interested") {
     await createTask({ title: result.nextStep, leadId: ctx.lead.id, dueAt: new Date(Date.now() + 2 * DAY_MS), source: "call_summary" });
